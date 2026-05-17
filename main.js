@@ -297,6 +297,19 @@ function createFloating() {
     floatWin.setMenuBarVisibility(false);
     floatWin.setTitle('');
     floatWin.on('close', e => e.preventDefault());
+
+    // Keep floating above screenshot overlays and other always-on-top windows
+    floatWin.setAlwaysOnTop(true, 'screen-saver');
+
+    // Restore visibility if something hides it (e.g. Win+Shift+S)
+    floatWin.on('hide', () => {
+        setTimeout(() => {
+            if (floatWin && !floatWin.isDestroyed() && !floatWin.isVisible()) {
+                floatWin.show();
+                floatWin.setAlwaysOnTop(true, 'screen-saver');
+            }
+        }, 1000);
+    });
     // Circular shape
     const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
     const rects = [];
@@ -603,6 +616,19 @@ function setupIPC() {
     });
 
     ipcMain.handle('hide_floating', () => { floatWin?.hide(); });
+
+    // Display toggle — which providers show on floating icon
+    ipcMain.handle('get_display_providers', () => {
+        const cfg = loadConfig();
+        return cfg.display_providers || null; // null = show all
+    });
+
+    ipcMain.handle('set_display_providers', (_, { providers }) => {
+        const cfg = loadConfig();
+        cfg.display_providers = providers;
+        saveConfig(cfg);
+        broadcast('display-providers-changed', { providers });
+    });
 
     // Open URL in default browser
     ipcMain.handle('open_external', (_, { url }) => {

@@ -76,31 +76,83 @@ const ICON_MAP = {
     gemini: 'assets/icons/gemini.png',
 };
 
-function updateFloatingDisplay() {
-    // Find provider with highest usage
-    let maxUtil = 0;
-    let maxProvider = 'claude';
+function getProviderUsage(prov) {
+    const data = providerUsage[prov];
+    if (!data) return 0;
+    const vals = [
+        data.session?.utilization,
+        data.weekly?.utilization,
+        data.weekly_opus?.utilization,
+    ].filter(v => v != null);
+    return vals.length ? Math.max(...vals) : 0;
+}
 
-    for (const [prov, data] of Object.entries(providerUsage)) {
-        const vals = [
-            data.session?.utilization,
-            data.weekly?.utilization,
-            data.weekly_opus?.utilization,
-        ].filter(v => v != null);
-        const hi = vals.length ? Math.max(...vals) : 0;
-        if (hi >= maxUtil) {
-            maxUtil = hi;
-            maxProvider = prov;
-        }
+// Get list of connected providers (have usage data), filtered by display toggle
+let displayProviders = null; // null = show all
+
+function getConnectedProviders() {
+    const all = Object.keys(providerUsage);
+    if (!displayProviders) return all;
+    return all.filter(p => displayProviders.includes(p));
+}
+
+// Listen for display toggle changes from settings
+listen('display-providers-changed', ({ payload }) => {
+    displayProviders = payload.providers;
+    rotateIndex = 0;
+    updateFloatingDisplay();
+});
+
+// Load initial display config
+invoke('get_display_providers').then(providers => {
+    displayProviders = providers;
+    updateFloatingDisplay();
+}).catch(() => {});
+
+// Current display index for rotation
+let rotateIndex = 0;
+
+function updateFloatingDisplay() {
+    const connected = getConnectedProviders();
+    if (connected.length === 0) {
+        icon.className = 'floating-icon low';
+        iconPct.textContent = '--';
+        iconPct.style.color = '#94a3b8';
+        return;
     }
 
-    // Update icon to show the provider with highest usage
-    icon.className = `floating-icon ${usageColorClass(maxUtil)}`;
-    iconPct.textContent = Math.round(maxUtil * 100) + '%';
-    iconPct.style.color = usageColor(maxUtil);
+    // If only 1 provider, always show it
+    // If multiple, show current rotation target
+    const prov = connected.length === 1
+        ? connected[0]
+        : connected[rotateIndex % connected.length];
 
-    // Show logo of the highest-usage provider
-    if (ICON_MAP[maxProvider] && iconLogo) {
-        iconLogo.src = ICON_MAP[maxProvider];
+    const util = getProviderUsage(prov);
+
+    icon.className = `floating-icon ${usageColorClass(util)}`;
+    iconPct.textContent = Math.round(util * 100) + '%';
+    iconPct.style.color = usageColor(util);
+
+    if (ICON_MAP[prov] && iconLogo) {
+        iconLogo.src = ICON_MAP[prov];
     }
 }
+
+// Rotate between providers every 10 seconds with fade
+let rotating = false;
+setInterval(() => {
+    const connected = getConnectedProviders();
+    if (connected.length > 1 && !rotating) {
+        rotating = true;
+        // Fade out
+        icon.style.transition = 'opacity 0.4s ease';
+        icon.style.opacity = '0.3';
+        setTimeout(() => {
+            rotateIndex = (rotateIndex + 1) % connected.length;
+            updateFloatingDisplay();
+            // Fade in
+            icon.style.opacity = '1';
+            setTimeout(() => { rotating = false; }, 400);
+        }, 400);
+    }
+}, 10000);

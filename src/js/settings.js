@@ -8,6 +8,7 @@ let cfg = null;
     const providers = await invoke('get_providers');
     renderProviders(providers);
     updateApiKeyStatus();
+    loadDisplayToggles();
 })();
 
 function applySettings(s) {
@@ -137,3 +138,31 @@ window.disconnectProvider = async (provider) => {
 };
 
 window.closeSettings = () => invoke('hide_settings');
+
+// ─── Display toggle (which providers show on floating icon) ───────────────
+async function loadDisplayToggles() {
+    const providers = await invoke('get_display_providers');
+    // null = all enabled
+    document.getElementById('display-claude').checked = !providers || providers.includes('claude');
+    document.getElementById('display-codex').checked  = !providers || providers.includes('codex');
+}
+
+window.updateDisplayProviders = async () => {
+    const claude = document.getElementById('display-claude').checked;
+    const codex  = document.getElementById('display-codex').checked;
+
+    let providers = null; // null = show all
+    if (claude && codex) {
+        providers = null;
+    } else if (claude) {
+        providers = ['claude'];
+    } else if (codex) {
+        providers = ['codex'];
+    } else {
+        // At least one must be selected
+        providers = ['claude'];
+        document.getElementById('display-claude').checked = true;
+    }
+
+    await invoke('set_display_providers', { providers });
+};
