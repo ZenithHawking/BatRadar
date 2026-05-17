@@ -1,4 +1,4 @@
-# BatRadar ⚡
+# BatRadar 🦇
 
 > Monitor your AI coding tool usage limits — Claude Code, Codex — from a floating desktop overlay.
 
@@ -17,6 +17,26 @@ When usage gets high, it sends a Windows notification before you hit the limit.
 
 ---
 
+## Screenshots
+
+| Dashboard | Floating Icon |
+|:---:|:---:|
+| ![Dashboard](screenshots/dashboard.png) | ![Floating](screenshots/floating.png) |
+
+| Settings — Providers | Settings — General |
+|:---:|:---:|
+| ![Settings Providers](screenshots/settings-providers.png) | ![Settings General](screenshots/settings-general.png) |
+
+---
+
+## Download
+
+Go to [**Releases**](https://github.com/ZenithHawking/BatRadar/releases) and download `BatRadar Setup x.x.x.exe`.
+
+Run the installer — no configuration needed. BatRadar will appear in your system tray immediately.
+
+---
+
 ## Features
 
 - **Floating overlay** — a draggable circular icon that shows your highest current usage % and changes color as it rises
@@ -29,28 +49,12 @@ When usage gets high, it sends a Windows notification before you hit the limit.
 
 ---
 
-## Screenshots
-
-| Floating Icon | Dashboard | Settings |
-|:---:|:---:|:---:|
-| small circular overlay on desktop | usage bars per provider | configure interval & alerts |
-
----
-
-## Download
-
-Go to [**Releases**](https://github.com/ZenithHawking/BatRadar/releases) and download `BatRadar Setup x.x.x.exe`.
-
-Run the installer — no configuration needed. BatRadar will appear in your system tray immediately.
-
----
-
 ## Supported Providers
 
 | Provider | Auth method | How to connect |
 |---|---|---|
 | **Claude Code** | OAuth (auto) | Run `claude login` in terminal |
-| **Claude Code** | API Key | Enter key in Settings → Claude API Key |
+| **Claude Code** | API Key | Enter key in Settings → Manual API Key |
 | **Codex** | OAuth (auto) | Run `npm i -g @openai/codex` then `codex` |
 | **Gemini CLI** | — | Coming soon |
 
@@ -122,8 +126,7 @@ BatRadar/
 │   │   └── utils.js     # Shared helpers
 │   ├── css/             # Per-window stylesheets
 │   └── assets/icons/    # Provider icons, tray icon, app icon
-└── .github/workflows/
-    └── release.yml      # Auto-build & publish on git tag
+└── screenshots/         # App screenshots for README
 ```
 
 ---
@@ -134,6 +137,15 @@ BatRadar/
 2. It polls the provider APIs in the background on your configured interval
 3. Usage data is broadcast to all open windows (dashboard, overlay, settings) in real time
 4. If usage crosses a threshold, a Windows notification fires — once per usage window, not on every poll
+
+---
+
+## Privacy
+
+- All data stays on your machine
+- No analytics or telemetry
+- API keys stored locally with base64 encoding
+- Credentials are only sent to the respective provider APIs (Anthropic, OpenAI)
 
 ---
 
