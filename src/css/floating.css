@@ -1,0 +1,51 @@
+html, body {
+  width: 62px;
+  height: 62px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0f0f1a;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.floating-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #0f0f1a;
+  border: 2.5px solid #22C55E;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition: border-color 0.3s;
+  cursor: grab;
+}
+
+.floating-icon.low      { border-color:#22C55E; }
+.floating-icon.medium   { border-color:#EAB308; }
+.floating-icon.high     { border-color:#F97316; }
+.floating-icon.critical { border-color:#EF4444; animation: pulse 1.5s ease-in-out infinite; }
+
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.7; }
+}
+
+.icon-logo {
+  pointer-events: none;
+  display: block;
+}
+
+.icon-pct {
+  font-size: 9px;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1;
+  pointer-events: none;
+}

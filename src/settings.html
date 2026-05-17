@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - BatRadar</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/settings.css">
+</head>
+<body>
+  <div class="header">
+    <span class="header-title">⚙️ Settings</span>
+  </div>
+
+  <div class="content">
+
+    <!-- AI Providers -->
+    <div>
+      <div class="section-label">AI Providers</div>
+      <div id="providers-list">
+        <div style="color:var(--text-dim);font-size:11px;padding:8px">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Manual API Key -->
+    <div>
+      <div class="section-label">
+        Manual API Key
+        <span class="help-btn" id="help-toggle" onclick="toggleHelp()">?</span>
+      </div>
+
+      <div id="apikey-help" class="help-panel">
+        <div class="help-title">🔑 How to get API keys</div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/claude.png" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>Claude (Anthropic)</strong>
+          </div>
+          <div class="help-steps">
+            <b>Option A — OAuth (recommended):</b><br>
+            Run <code>claude login</code> in terminal. Done!<br><br>
+            <b>Option B — API Key:</b><br>
+            1. Go to <span class="help-link" onclick="openExternal('https://console.anthropic.com/settings/keys')">console.anthropic.com → API Keys</span><br>
+            2. Create Key → copy <code>sk-ant-api03-...</code>
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/codex.png" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>Codex (OpenAI)</strong>
+          </div>
+          <div class="help-steps">
+            <b>OAuth only (auto-detect):</b><br>
+            1. Install: <code>npm install -g @openai/codex</code><br>
+            2. Run: <code>codex</code><br>
+            3. Login with ChatGPT account<br>
+            4. BatRadar detects automatically. No key needed!
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/gemini.png" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>Gemini (Google)</strong>
+          </div>
+          <div class="help-steps">
+            Coming soon. Visit <span class="help-link" onclick="openExternal('https://aistudio.google.com/apikey')">aistudio.google.com</span> to get a key.
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;">
+        <div id="apikey-status" style="font-size:11px;margin-bottom:6px;color:var(--text-dim)"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="password" id="input-apikey" placeholder="sk-ant-api03-..."
+            style="flex:1;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:monospace;outline:none">
+          <button class="btn-primary" onclick="saveApiKey()" style="padding:6px 12px">Save</button>
+          <button class="btn-danger" onclick="removeApiKey()" style="padding:6px 10px">✕</button>
+        </div>
+        <div class="setting-desc" style="margin-top:6px;color:var(--color-yellow);font-size:10px">
+          ⚠ Key stored locally only. Never sent to any server except the provider's API.
+        </div>
+      </div>
+    </div>
+
+    <!-- General settings -->
+    <div>
+      <div class="section-label">General</div>
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px 12px;">
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Run on startup</div>
+            <div class="setting-desc">Launch BatRadar when Windows starts</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-autostart"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Poll interval</div>
+            <div class="setting-desc">How often to check usage</div>
+          </div>
+          <select id="select-interval">
+            <option value="15">15s</option><option value="30" selected>30s</option>
+            <option value="60">60s</option><option value="120">2m</option><option value="300">5m</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Alert threshold</div>
+            <div class="setting-desc">Notify when usage exceeds this</div>
+          </div>
+          <select id="select-alert">
+            <option value="0.6">60%</option><option value="0.7">70%</option>
+            <option value="0.8" selected>80%</option><option value="0.9">90%</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Notifications</div>
+            <div class="setting-desc">Windows toast notifications</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-notification" checked><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <button class="btn-ghost" onclick="closeSettings()">Cancel</button>
+    <button class="btn-primary" onclick="saveSettings()">Save</button>
+  </div>
+
+  <script type="module" src="js/settings.js"></script>
+</body>
+</html>

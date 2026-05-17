@@ -1,0 +1,111 @@
+:root {
+  --bg-primary:    #0f0f1a;
+  --bg-secondary:  #1a1a2e;
+  --bg-card:       #16213e;
+  --bg-hover:      #1e2a45;
+  --text-primary:  #e2e8f0;
+  --text-muted:    #94a3b8;
+  --text-dim:      #64748b;
+  --border:        #2d3748;
+
+  --color-green:   #22C55E;
+  --color-yellow:  #EAB308;
+  --color-orange:  #F97316;
+  --color-red:     #EF4444;
+
+  --accent-claude: #D97706;
+  --accent-codex:  #10B981;
+  --accent-gemini: #3B82F6;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.4;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+button:hover { opacity: 0.85; }
+button:active { opacity: 0.7; }
+
+.btn-primary {
+  background: var(--accent-claude);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.btn-danger {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+/* Progress bar */
+.progress-bar-wrap {
+  background: var(--bg-primary);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.6s ease, background-color 0.4s;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.status-badge.connected  { background: #14532d; color: #4ade80; }
+.status-badge.disconnected { background: #1c1c2e; color: var(--text-dim); }
+.status-badge.expired    { background: #451a03; color: #fb923c; }
+.status-badge.error      { background: #450a0a; color: #f87171; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

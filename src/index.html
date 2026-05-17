@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BatRadar</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">
+      <span>⚡</span>
+      <span>BATRADAR</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost" onclick="openSettings()" title="Settings">⚙️</button>
+      <button class="btn-ghost" onclick="minimizeDashboard()" title="Minimize">—</button>
+      <button class="btn-ghost" onclick="closeDashboard()" title="Close">✕</button>
+    </div>
+  </div>
+
+  <!-- Provider cards -->
+  <div class="content" id="providers"></div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="footer-status" id="status-text">Loading...</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn-ghost" onclick="toggleFloating()" title="Show/hide floating icon">⊙ Icon</button>
+      <button class="btn-ghost" onclick="minimizeDashboard()">Minimize</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
