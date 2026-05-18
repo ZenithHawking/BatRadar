@@ -10,6 +10,7 @@
 <p align="center">
   <img src="src/assets/icons/icon-nobr.png" width="128" alt="BatRadar Icon"/>
 </p>
+
 ---
 
 ## What is BatRadar?
