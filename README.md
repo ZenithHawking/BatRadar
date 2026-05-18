@@ -1,7 +1,5 @@
 # BatRadar 🦇
-<p align="center">
-  <img src="src/assets/icons/icon-nobr.png" width="128" alt="BatRadar Icon"/>
-</p>
+
 > Monitor your AI coding tool usage limits — Claude Code, Codex — from a floating desktop overlay.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
@@ -9,6 +7,9 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/ZenithHawking/BatRadar)
 
+<p align="center">
+  <img src="src/assets/icons/icon-nobr.png" width="128" alt="BatRadar Icon"/>
+</p>
 ---
 
 ## What is BatRadar?
