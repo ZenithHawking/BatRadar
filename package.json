@@ -1,6 +1,6 @@
 {
   "name": "bat-radar",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "BatRadar - AI Tools Usage Monitor",
   "main": "main.js",
   "author": "BatRadar",

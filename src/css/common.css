@@ -102,6 +102,7 @@ button:active { opacity: 0.7; }
 
 .status-badge.connected  { background: #14532d; color: #4ade80; }
 .status-badge.disconnected { background: #1c1c2e; color: var(--text-dim); }
+.status-badge.disabled   { background: #1e293b; color: #94a3b8; }
 .status-badge.expired    { background: #451a03; color: #fb923c; }
 .status-badge.error      { background: #450a0a; color: #f87171; }
 

@@ -20,6 +20,14 @@ listen('provider-status-changed', ({ payload }) => {
     if (!card) return;
     const badge = card.querySelector('.status-badge');
     if (badge) { badge.className = `status-badge ${payload.status}`; badge.textContent = statusLabel(payload.status); }
+    if (payload.status === 'disabled') {
+        card.classList.remove('active');
+        const sec = card.querySelector(`#usage-${payload.provider}`);
+        if (sec) sec.innerHTML = `<div class="provider-disconnected">
+            <span class="disconnected-label">Đã tắt — vào Settings để bật lại</span>
+            <button class="btn-ghost" onclick="window.openSettings()">Settings</button>
+           </div>`;
+    }
     if (payload.status === 'expired') updateStatus(`⚠️ ${payload.provider} token expired`);
     else if (payload.status === 'error') updateStatus('Connection error — retrying…');
 });
@@ -120,9 +128,10 @@ function renderError(card, msg) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusLabel(s) {
-    return { connected: '● Connected', disconnected: '○ Not Connected', expired: '⚠ Expired', error: '✕ Error' }[s] || s;
+    return { connected: '● Connected', disconnected: '○ Not Connected', disabled: '⏸ Disabled', expired: '⚠ Expired', error: '✕ Error' }[s] || s;
 }
 function hint(p) {
+    if (p.status === 'disabled') return 'Đã tắt — vào Settings để bật lại';
     if (p.status === 'expired') return 'Token expired';
     if (p.status === 'error') return 'Connection error';
     if (p.id === 'claude') return 'Not connected — run: claude login';

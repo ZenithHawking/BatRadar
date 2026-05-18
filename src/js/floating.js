@@ -58,7 +58,7 @@ listen('usage-update', ({ payload }) => {
 });
 
 listen('provider-status-changed', ({ payload }) => {
-    if (['disconnected', 'expired', 'error'].includes(payload.status)) {
+    if (['disconnected', 'disabled', 'expired', 'error'].includes(payload.status)) {
         delete providerUsage[payload.provider];
         updateFloatingDisplay();
     }

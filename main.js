@@ -395,6 +395,7 @@ async function pollClaude() {
         st.extraDelay = 0;
         broadcast('usage-update', { provider: 'claude', data });
         broadcast('provider-status-changed', { provider: 'claude', status: 'connected' });
+        checkAlerts('claude', data, loadConfig());
         console.log(`[BatRadar][Claude] OK — session=${data.session?.utilization ?? 'n/a'}`);
     } catch (err) {
         console.error('[BatRadar][Claude] Error:', err.message);
@@ -432,6 +433,7 @@ async function pollCodex() {
         st.extraDelay = 0;
         broadcast('usage-update', { provider: 'codex', data });
         broadcast('provider-status-changed', { provider: 'codex', status: 'connected' });
+        checkAlerts('codex', data, loadConfig());
         console.log(`[BatRadar][Codex] OK — session=${data.session?.utilization ?? 'n/a'}`);
     } catch (err) {
         console.error('[BatRadar][Codex] Error:', err.message);
@@ -472,6 +474,7 @@ function stopPolling() {
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 function checkAlerts(provider, data, cfg) {
+    if (!cfg.notification_enabled) return;
     const { session } = data;
     if (!session) return;
     const key = `${provider}_session`;
@@ -506,14 +509,20 @@ function fmtDur(s) {
 // ─── IPC ──────────────────────────────────────────────────────────────────────
 function setupIPC() {
     ipcMain.handle('get_providers', () => {
+        const cfg = loadConfig();
+        const enabled = cfg.enabled_providers || ['claude', 'codex'];
         const claudeToken = readClaudeToken();
         const claudePlan  = readClaudePlan();
         const claudeAuth  = getClaudeAuthMethod();
         const codexAuth   = readCodexAuth();
         const codexPlan   = readCodexPlan();
+        const claudeStatus = !enabled.includes('claude') ? 'disabled'
+                           : claudeToken ? 'connected' : 'disconnected';
+        const codexStatus  = !enabled.includes('codex') ? 'disabled'
+                           : codexAuth ? 'connected' : 'disconnected';
         return [
-            { id: 'claude', name: 'Claude Code', icon: 'claude', plan: claudePlan, status: claudeToken ? 'connected' : 'disconnected', auth: claudeAuth, error: null },
-            { id: 'codex',  name: 'Codex',       icon: 'codex',  plan: codexPlan,  status: codexAuth ? 'connected' : 'disconnected', auth: codexAuth ? 'oauth' : 'none', error: null },
+            { id: 'claude', name: 'Claude Code', icon: 'claude', plan: claudePlan, status: claudeStatus, auth: claudeAuth, error: null },
+            { id: 'codex',  name: 'Codex',       icon: 'codex',  plan: codexPlan,  status: codexStatus,  auth: codexAuth ? 'oauth' : 'none', error: null },
             { id: 'gemini', name: 'Gemini CLI',   icon: 'gemini', plan: null, status: 'disconnected', auth: 'none', error: null },
         ];
     });
@@ -570,13 +579,27 @@ function setupIPC() {
     ipcMain.handle('get_auth_method', () => getClaudeAuthMethod());
 
     ipcMain.handle('disconnect_provider', (_, { provider }) => {
-        if (provider === 'claude') {
-            deleteManualApiKey();
-            providerState.claude.cache = null;
+        const cfg = loadConfig();
+        cfg.enabled_providers = (cfg.enabled_providers || ['claude', 'codex'])
+            .filter(p => p !== provider);
+        saveConfig(cfg);
+        if (provider === 'claude') deleteManualApiKey();
+        if (providerState[provider]) {
+            providerState[provider].cache = null;
+            providerState[provider].alertSt = {};
+            providerState[provider].lastPollAt = 0;
         }
-        if (provider === 'codex') {
-            providerState.codex.cache = null;
-        }
+        broadcast('provider-status-changed', { provider, status: 'disabled' });
+        stopPolling(); startPolling();
+        return null;
+    });
+
+    ipcMain.handle('reconnect_provider', (_, { provider }) => {
+        const cfg = loadConfig();
+        const enabled = new Set(cfg.enabled_providers || ['claude', 'codex']);
+        enabled.add(provider);
+        cfg.enabled_providers = Array.from(enabled);
+        saveConfig(cfg);
         stopPolling(); startPolling();
         return null;
     });

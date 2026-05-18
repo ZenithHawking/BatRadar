@@ -52,6 +52,7 @@ function renderProviders(providers) {
     const labels = {
         connected: '✅ Connected',
         disconnected: 'Not connected',
+        disabled: '⏸ Disabled (paused by you)',
         expired: '⚠️ Token expired',
         error: '✕ Error'
     };
@@ -66,6 +67,14 @@ function renderProviders(providers) {
                         : '';
         const div = document.createElement('div');
         div.className = 'provider-item';
+        let actionHtml;
+        if (p.status === 'connected') {
+            actionHtml = `<button class="btn-danger" onclick="disconnectProvider('${p.id}')">Disconnect</button>`;
+        } else if (p.status === 'disabled') {
+            actionHtml = `<button class="btn-primary" onclick="reconnectProvider('${p.id}')">Bật lại</button>`;
+        } else {
+            actionHtml = `<span style="font-size:10px;color:var(--text-dim)">${setupHints[p.id] || ''}</span>`;
+        }
         div.innerHTML = `
           <div class="provider-row">
             <div class="provider-row-left">
@@ -76,17 +85,14 @@ function renderProviders(providers) {
           </div>
           <div class="provider-detail">
             <span>${labels[p.status] || p.status} ${authLabel}</span>
-            ${p.status === 'connected'
-                ? `<button class="btn-danger" onclick="disconnectProvider('${p.id}')">Disconnect</button>`
-                : `<span style="font-size:10px;color:var(--text-dim)">${setupHints[p.id] || ''}</span>`
-            }
+            ${actionHtml}
           </div>`;
         el.appendChild(div);
     }
 }
 
 function badgeLabel(s) {
-    return { connected: '● On', disconnected: '○ Off', expired: '⚠', error: '✕' }[s] || s;
+    return { connected: '● On', disconnected: '○ Off', disabled: '⏸ Off', expired: '⚠', error: '✕' }[s] || s;
 }
 
 async function updateApiKeyStatus() {
@@ -153,8 +159,15 @@ window.saveSettings = async () => {
 };
 
 window.disconnectProvider = async (provider) => {
-    if (!confirm(`Disconnect ${provider}?`)) return;
+    if (!confirm(`Disconnect ${provider}?\n\nApp sẽ ngừng theo dõi provider này. Credentials gốc (${provider === 'claude' ? 'claude login' : 'codex login'}) không bị xóa — bạn có thể bật lại bất cứ lúc nào.`)) return;
     await invoke('disconnect_provider', { provider });
+    await updateApiKeyStatus();
+    const providers = await invoke('get_providers');
+    renderProviders(providers);
+};
+
+window.reconnectProvider = async (provider) => {
+    await invoke('reconnect_provider', { provider });
     await updateApiKeyStatus();
     const providers = await invoke('get_providers');
     renderProviders(providers);
