@@ -3,6 +3,9 @@ import { invoke, listen, usageColorClass, usageColor } from './utils.js';
 const icon    = document.getElementById('floating-icon');
 const iconPct = document.getElementById('icon-pct');
 const iconLogo = document.getElementById('icon-logo');
+const iconBadge = document.getElementById('icon-badge');
+
+const WEEKLY_OVERRIDE_THRESHOLD = 0.9;
 
 // Track highest usage across providers
 let providerUsage = {};
@@ -78,13 +81,13 @@ const ICON_MAP = {
 
 function getProviderUsage(prov) {
     const data = providerUsage[prov];
-    if (!data) return 0;
-    const vals = [
-        data.session?.utilization,
-        data.weekly?.utilization,
-        data.weekly_opus?.utilization,
-    ].filter(v => v != null);
-    return vals.length ? Math.max(...vals) : 0;
+    if (!data) return { util: 0, source: 'session' };
+    const session = data.session?.utilization ?? 0;
+    const weekly  = data.weekly?.utilization ?? 0;
+    if (weekly >= WEEKLY_OVERRIDE_THRESHOLD && weekly > session) {
+        return { util: weekly, source: 'weekly' };
+    }
+    return { util: session, source: 'session' };
 }
 
 // Get list of connected providers (have usage data), filtered by display toggle
@@ -127,11 +130,13 @@ function updateFloatingDisplay() {
         ? connected[0]
         : connected[rotateIndex % connected.length];
 
-    const util = getProviderUsage(prov);
+    const { util, source } = getProviderUsage(prov);
 
     icon.className = `floating-icon ${usageColorClass(util)}`;
     iconPct.textContent = Math.round(util * 100) + '%';
     iconPct.style.color = usageColor(util);
+
+    if (iconBadge) iconBadge.hidden = source !== 'weekly';
 
     if (ICON_MAP[prov] && iconLogo) {
         iconLogo.src = ICON_MAP[prov];

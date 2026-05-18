@@ -9,7 +9,30 @@ let cfg = null;
     renderProviders(providers);
     updateApiKeyStatus();
     loadDisplayToggles();
+    loadAppVersion();
 })();
+
+async function loadAppVersion() {
+    try {
+        const v = await invoke('get_app_version');
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = `Phiên bản: ${v}`;
+    } catch {}
+}
+
+window.checkUpdates = async () => {
+    const btn = document.getElementById('btn-check-updates');
+    if (btn) { btn.disabled = true; btn.textContent = 'Đang kiểm tra…'; }
+    try {
+        await invoke('check_for_updates');
+    } catch (e) {
+        alert('Lỗi: ' + e);
+    } finally {
+        setTimeout(() => {
+            if (btn) { btn.disabled = false; btn.textContent = 'Kiểm tra'; }
+        }, 2000);
+    }
+};
 
 function applySettings(s) {
     document.getElementById('toggle-autostart').checked    = s.autostart;

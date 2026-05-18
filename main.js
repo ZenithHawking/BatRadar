@@ -2,11 +2,12 @@
 
 const {
     app, BrowserWindow, Tray, Menu,
-    ipcMain, Notification, screen, shell,
+    ipcMain, Notification, screen, shell, dialog,
 } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
+const { autoUpdater } = require('electron-updater');
 
 // ─── Single instance ──────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
@@ -264,6 +265,7 @@ function parseCodexUsage(raw) {
 
 // ─── Windows ─────────────────────────────────────────────────────────────────
 let dashWin, floatWin, settWin, tray;
+let floatingIntentionallyHidden = false;
 
 const WP = {
     preload: PRELOAD,
@@ -301,9 +303,11 @@ function createFloating() {
     // Keep floating above screenshot overlays and other always-on-top windows
     floatWin.setAlwaysOnTop(true, 'screen-saver');
 
-    // Restore visibility if something hides it (e.g. Win+Shift+S)
+    // Restore visibility if something hides it (e.g. Win+Shift+S),
+    // but skip when the user intentionally hid it from the dashboard toggle.
     floatWin.on('hide', () => {
         setTimeout(() => {
+            if (floatingIntentionallyHidden) return;
             if (floatWin && !floatWin.isDestroyed() && !floatWin.isVisible()) {
                 floatWin.show();
                 floatWin.setAlwaysOnTop(true, 'screen-saver');
@@ -349,7 +353,7 @@ function createTray() {
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Show Dashboard', click: showDash },
         { label: 'Settings', click: showSett },
-        { label: 'About BatRadar 0.2.0' },
+        { label: `About BatRadar ${app.getVersion()}`, enabled: false },
         { type: 'separator' },
         { label: 'Exit', click: () => app.exit(0) },
     ]));
@@ -608,6 +612,7 @@ function setupIPC() {
     ipcMain.handle('set_float_interactive', () => {});
 
     ipcMain.handle('show_floating', () => {
+        floatingIntentionallyHidden = false;
         if (!floatWin || floatWin.isDestroyed()) { createFloating(); return; }
         const { width, height } = require('electron').screen.getPrimaryDisplay().workAreaSize;
         const [x, y] = floatWin.getPosition();
@@ -615,7 +620,10 @@ function setupIPC() {
         floatWin.show();
     });
 
-    ipcMain.handle('hide_floating', () => { floatWin?.hide(); });
+    ipcMain.handle('hide_floating', () => {
+        floatingIntentionallyHidden = true;
+        floatWin?.hide();
+    });
 
     // Display toggle — which providers show on floating icon
     ipcMain.handle('get_display_providers', () => {
@@ -636,6 +644,118 @@ function setupIPC() {
             shell.openExternal(url);
         }
     });
+
+    ipcMain.handle('check_for_updates', () => checkForUpdatesManual());
+
+    ipcMain.handle('get_app_version', () => app.getVersion());
+}
+
+// ─── Auto Update ──────────────────────────────────────────────────────────────
+let updateCheckInFlight = false;
+let updateDeclinedForThisVersion = null;
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.logger = { info: (...a) => console.log('[Updater]', ...a),
+                      warn: (...a) => console.warn('[Updater]', ...a),
+                      error: (...a) => console.error('[Updater]', ...a),
+                      debug: () => {} };
+
+autoUpdater.on('update-available', async (info) => {
+    if (updateDeclinedForThisVersion === info.version) return;
+    const owner = dashWin && !dashWin.isDestroyed() ? dashWin : null;
+    const { response } = await dialog.showMessageBox(owner, {
+        type: 'info',
+        title: 'BatRadar — Có phiên bản mới',
+        message: `BatRadar ${info.version} đã có.`,
+        detail: `Phiên bản hiện tại: ${app.getVersion()}\n\nBấm "Cập nhật" để tải về và cài đặt.`,
+        buttons: ['Cập nhật', 'Để sau'],
+        defaultId: 0,
+        cancelId: 1,
+    });
+    if (response === 0) {
+        autoUpdater.downloadUpdate().catch(err => {
+            console.error('[Updater] downloadUpdate failed:', err);
+            dialog.showErrorBox('Tải thất bại', String(err?.message || err));
+        });
+    } else {
+        updateDeclinedForThisVersion = info.version;
+    }
+});
+
+autoUpdater.on('update-not-available', () => {
+    if (updateCheckInFlight === 'manual') {
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'BatRadar',
+            message: 'Bạn đang dùng phiên bản mới nhất.',
+            detail: `Phiên bản: ${app.getVersion()}`,
+            buttons: ['OK'],
+        });
+    }
+});
+
+autoUpdater.on('download-progress', (p) => {
+    const pct = Math.round(p.percent);
+    console.log(`[Updater] Downloading… ${pct}%`);
+    broadcast('update-download-progress', { percent: pct });
+});
+
+autoUpdater.on('update-downloaded', async (info) => {
+    const { response } = await dialog.showMessageBox({
+        type: 'info',
+        title: 'BatRadar — Sẵn sàng cài',
+        message: `Phiên bản ${info.version} đã tải xong.`,
+        detail: 'App sẽ khởi động lại để cài đặt phiên bản mới.',
+        buttons: ['Khởi động lại ngay', 'Khi tắt app'],
+        defaultId: 0,
+        cancelId: 1,
+    });
+    if (response === 0) {
+        setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    }
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('[Updater] error:', err?.message || err);
+    if (updateCheckInFlight === 'manual') {
+        dialog.showErrorBox('Không kiểm tra được cập nhật', String(err?.message || err));
+    }
+    updateCheckInFlight = false;
+});
+
+autoUpdater.on('checking-for-update', () => {
+    console.log('[Updater] Checking…');
+});
+
+function checkForUpdatesSilent() {
+    if (!app.isPackaged) {
+        console.log('[Updater] Skip — running unpackaged (dev mode)');
+        return;
+    }
+    if (updateCheckInFlight) return;
+    updateCheckInFlight = 'auto';
+    autoUpdater.checkForUpdates()
+        .catch(err => console.error('[Updater] check failed:', err?.message || err))
+        .finally(() => { updateCheckInFlight = false; });
+}
+
+function checkForUpdatesManual() {
+    if (!app.isPackaged) {
+        dialog.showMessageBox({
+            type: 'info',
+            title: 'BatRadar',
+            message: 'Auto-update chỉ chạy trên bản đã đóng gói.',
+            detail: 'Đang chạy từ source (dev) — không kiểm tra được.',
+            buttons: ['OK'],
+        });
+        return;
+    }
+    if (updateCheckInFlight) return;
+    updateCheckInFlight = 'manual';
+    autoUpdater.checkForUpdates()
+        .catch(err => console.error('[Updater] manual check failed:', err?.message || err))
+        .finally(() => { updateCheckInFlight = false; });
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -647,6 +767,8 @@ app.whenReady().then(() => {
     setupIPC();
     startPolling();
     setTimeout(() => { dashWin.show(); dashWin.center(); dashWin.focus(); }, 400);
+    // Check for updates 10s after startup so it doesn't compete with initial polling
+    setTimeout(checkForUpdatesSilent, 10000);
 });
 
 app.on('second-instance', showDash);
