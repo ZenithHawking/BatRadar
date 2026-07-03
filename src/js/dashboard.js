@@ -1,4 +1,5 @@
 import { invoke, listen, usageColorClass, usageColor, secondsUntil, formatDuration, PROVIDER_COLORS } from './utils.js';
+import { icon } from './icons.js';
 
 const providersEl = document.getElementById('providers');
 const statusEl    = document.getElementById('status-text');
@@ -28,7 +29,7 @@ listen('provider-status-changed', ({ payload }) => {
             <button class="btn-ghost" onclick="window.openSettings()">Settings</button>
            </div>`;
     }
-    if (payload.status === 'expired') updateStatus(`⚠️ ${payload.provider} token expired`);
+    if (payload.status === 'expired') updateStatus(`${payload.provider} token expired`);
     else if (payload.status === 'error') updateStatus('Connection error — retrying…');
 });
 
@@ -64,7 +65,7 @@ function buildCard(p) {
     card.innerHTML = `
       <div class="provider-header">
         <div class="provider-name-row">
-          <div class="provider-icon" style="color:${color}">${ICONS[p.id] || '🔧'}</div>
+          <div class="provider-icon" style="color:${color}">${ICONS[p.id] || icon('wrench', 16)}</div>
           <span class="provider-name">${p.name}</span>
           ${p.plan ? `<span class="plan-tag">${cap(p.plan)}</span>` : ''}
         </div>
@@ -111,7 +112,7 @@ function usageRow(label, w) {
       <div class="usage-row-header">
         <span class="usage-label">${label}</span>
         <div class="usage-right">
-          <span class="usage-pct" style="color:${color}">${pct}%${u >= 0.95 ? ' ⚠️' : ''}</span>
+          <span class="usage-pct" style="color:${color}">${pct}%${u >= 0.95 ? ` ${icon('alert', 11)}` : ''}</span>
           <span class="usage-reset">resets in ${rst}</span>
         </div>
       </div>
@@ -128,7 +129,8 @@ function renderError(card, msg) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusLabel(s) {
-    return { connected: '● Connected', disconnected: '○ Not Connected', disabled: '⏸ Disabled', expired: '⚠ Expired', error: '✕ Error' }[s] || s;
+    // Dot glyph comes from .status-badge::before in CSS
+    return { connected: 'Connected', disconnected: 'Not Connected', disabled: 'Disabled', expired: 'Expired', error: 'Error' }[s] || s;
 }
 function hint(p) {
     if (p.status === 'disabled') return 'Đã tắt — vào Settings để bật lại';

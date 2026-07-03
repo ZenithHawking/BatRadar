@@ -1,4 +1,5 @@
 import { invoke } from './utils.js';
+import { icon } from './icons.js';
 
 let cfg = null;
 
@@ -50,11 +51,11 @@ function renderProviders(providers) {
         gemini: '<img src="assets/icons/gemini.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
     };
     const labels = {
-        connected: '✅ Connected',
+        connected: 'Connected',
         disconnected: 'Not connected',
-        disabled: '⏸ Disabled (paused by you)',
-        expired: '⚠️ Token expired',
-        error: '✕ Error'
+        disabled: 'Disabled (paused by you)',
+        expired: 'Token expired',
+        error: 'Error'
     };
     const setupHints = {
         claude: 'Run: <code>claude login</code> or enter API key',
@@ -92,18 +93,19 @@ function renderProviders(providers) {
 }
 
 function badgeLabel(s) {
-    return { connected: '● On', disconnected: '○ Off', disabled: '⏸ Off', expired: '⚠', error: '✕' }[s] || s;
+    // Dot glyph comes from .status-badge::before in CSS
+    return { connected: 'On', disconnected: 'Off', disabled: 'Off', expired: 'Expired', error: 'Error' }[s] || s;
 }
 
 async function updateApiKeyStatus() {
     const method = await invoke('get_auth_method');
     const statusEl = document.getElementById('apikey-status');
     if (method === 'api-key') {
-        statusEl.innerHTML = '🔑 <span style="color:var(--color-green)">Claude API key is set</span>';
+        statusEl.innerHTML = `${icon('key', 12)} <span style="color:var(--color-green)">Claude API key is set</span>`;
     } else if (method === 'oauth') {
-        statusEl.innerHTML = '🔗 <span style="color:var(--color-green)">Claude using OAuth</span> — API key not needed';
+        statusEl.innerHTML = `${icon('link', 12)} <span style="color:var(--color-green)">Claude using OAuth</span> — API key not needed`;
     } else {
-        statusEl.innerHTML = '⚠️ <span style="color:var(--color-yellow)">No Claude auth configured</span>';
+        statusEl.innerHTML = `${icon('alert', 12)} <span style="color:var(--color-yellow)">No Claude auth configured</span>`;
     }
 }
 
@@ -143,13 +145,12 @@ window.removeApiKey = async () => {
 };
 
 window.saveSettings = async () => {
+    // Only send the fields this form owns — main merges onto the current
+    // config, so stale values from app startup can't clobber anything.
     const settings = {
         autostart:             document.getElementById('toggle-autostart').checked,
         poll_interval_seconds: parseInt(document.getElementById('select-interval').value),
         alert_threshold:       parseFloat(document.getElementById('select-alert').value),
-        critical_threshold:    cfg?.critical_threshold ?? 0.95,
-        enabled_providers:     cfg?.enabled_providers ?? ['claude', 'codex'],
-        floating_position:     cfg?.floating_position ?? null,
         notification_enabled:  document.getElementById('toggle-notification').checked,
     };
     try {

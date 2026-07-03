@@ -4,19 +4,20 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #0f0f1a;
+  background: transparent;
   -webkit-app-region: no-drag;
   user-select: none;
 }
 
 .floating-icon {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 62px;
-  height: 62px;
+  /* 1px inset so the antialiased edge isn't clipped by the window bounds */
+  top: 1px;
+  left: 1px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background: #0f0f1a;
+  background: #0a0a0f;
   border: 2.5px solid #22C55E;
   display: flex;
   flex-direction: column;

@@ -1,12 +1,20 @@
 :root {
-  --bg-primary:    #0f0f1a;
-  --bg-secondary:  #1a1a2e;
-  --bg-card:       #16213e;
-  --bg-hover:      #1e2a45;
-  --text-primary:  #e2e8f0;
-  --text-muted:    #94a3b8;
-  --text-dim:      #64748b;
-  --border:        #2d3748;
+  /* Palette shared with the landing page */
+  --bg-primary:    #0a0a0f;
+  --bg-secondary:  #13131a;
+  --bg-card:       #13131a;
+  --bg-hover:      #1c1c26;
+  --text-primary:  #f5f5f7;
+  --text-muted:    #c2c2cc;
+  --text-dim:      #9494a2;
+  --border:        #2a2a38;
+  --border-bright: #3a3a4d;
+
+  --accent:        #a855f7;
+  --accent-hover:  #c084fc;
+  --accent-dim:    rgba(168, 85, 247, 0.55);
+  --accent-glow:   rgba(168, 85, 247, 0.35);
+  --accent-faint:  rgba(168, 85, 247, 0.08);
 
   --color-green:   #22C55E;
   --color-yellow:  #EAB308;
@@ -45,26 +53,32 @@ button {
   border: none;
   border-radius: var(--radius-sm);
   padding: 6px 14px;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
 
-button:hover { opacity: 0.85; }
 button:active { opacity: 0.7; }
 
 .btn-primary {
-  background: var(--accent-claude);
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
 }
+
+.btn-primary:hover { background: var(--accent-hover); }
 
 .btn-ghost {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .btn-ghost:hover {
   background: var(--bg-hover);
+  border-color: var(--border-bright);
   color: var(--text-primary);
   opacity: 1;
 }
@@ -72,11 +86,25 @@ button:active { opacity: 0.7; }
 .btn-danger {
   background: #7f1d1d;
   color: #fca5a5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.btn-danger:hover { background: #991b1b; color: #fecaca; }
+
+/* Icon-only square button (window controls) */
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 /* Progress bar */
 .progress-bar-wrap {
-  background: var(--bg-primary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-bright);
   border-radius: 99px;
   height: 8px;
   overflow: hidden;
@@ -88,25 +116,37 @@ button:active { opacity: 0.7; }
   transition: width 0.6s ease, background-color 0.4s;
 }
 
-/* Status badge */
+/* Status badge — colored dot comes from ::before, labels stay plain text */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 99px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.status-badge.connected  { background: #14532d; color: #4ade80; }
-.status-badge.disconnected { background: #1c1c2e; color: var(--text-dim); }
-.status-badge.disabled   { background: #1e293b; color: #94a3b8; }
-.status-badge.expired    { background: #451a03; color: #fb923c; }
-.status-badge.error      { background: #450a0a; color: #f87171; }
+.status-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-badge.connected    { background: rgba(34, 197, 94, 0.12);  color: #4ade80; }
+.status-badge.disconnected { background: var(--bg-hover);          color: var(--text-muted); }
+.status-badge.disabled     { background: var(--bg-hover);          color: var(--text-muted); }
+.status-badge.expired      { background: rgba(249, 115, 22, 0.12); color: #fb923c; }
+.status-badge.error        { background: rgba(239, 68, 68, 0.12);  color: #f87171; }
+
+/* Inline SVG icons align with text */
+svg { vertical-align: -0.125em; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }

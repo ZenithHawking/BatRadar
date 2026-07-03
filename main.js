@@ -13,6 +13,16 @@ const { autoUpdater } = require('electron-updater');
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 app.setAppUserModelId('com.batradar.app');
 
+// Windows marks the tiny transparent overlay as "occluded" when focus moves
+// elsewhere and stops compositing it — the transparent area then falls back
+// to the window's white base layer (white strip/flash). Disable the tracker.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+
+// Software rendering: the GPU compositing path still flashes the transparent
+// overlay white during fast window switching; the software path doesn't.
+// UI is tiny (progress bars + one 62px overlay), so the cost is negligible.
+app.disableHardwareAcceleration();
+
 // ─── Paths ────────────────────────────────────────────────────────────────────
 const CONFIG_DIR  = path.join(app.getPath('appData'), 'batradar');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
@@ -146,6 +156,89 @@ function readCodexPlan() {
     return null;
 }
 
+// ─── OAuth token refresh ──────────────────────────────────────────────────────
+// Public OAuth client IDs of the official CLIs (same ones they use to log in)
+const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const CODEX_OAUTH_CLIENT_ID  = 'app_EMoamEEZ73f0CkXaXp7hrann';
+
+// Write via temp file + rename so the CLI never sees a half-written file
+function atomicWriteJson(file, obj) {
+    const tmp = `${file}.batradar-tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
+    fs.renameSync(tmp, file);
+}
+
+async function refreshClaudeToken() {
+    const credPath = getClaudeCredPath();
+    const d = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    const rt = d?.claudeAiOauth?.refreshToken;
+    if (!rt) throw new Error('no_refresh_token');
+    const res = await fetch('https://console.anthropic.com/v1/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            grant_type: 'refresh_token',
+            refresh_token: rt,
+            client_id: CLAUDE_OAUTH_CLIENT_ID,
+        }),
+        signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`refresh_failed:${res.status}`);
+    const tok = await res.json();
+    if (!tok.access_token) throw new Error('refresh_failed:no_access_token');
+    d.claudeAiOauth.accessToken = tok.access_token;
+    if (tok.refresh_token) d.claudeAiOauth.refreshToken = tok.refresh_token;
+    if (tok.expires_in)    d.claudeAiOauth.expiresAt = Date.now() + tok.expires_in * 1000;
+    atomicWriteJson(credPath, d);
+    console.log('[BatRadar][Claude] Token refreshed, new expiry:', new Date(d.claudeAiOauth.expiresAt).toISOString());
+    return tok.access_token;
+}
+
+async function refreshCodexToken() {
+    const credPath = getCodexCredPath();
+    const d = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    const rt = d?.tokens?.refresh_token;
+    if (!rt) throw new Error('no_refresh_token');
+    const res = await fetch('https://auth.openai.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            grant_type: 'refresh_token',
+            refresh_token: rt,
+            client_id: CODEX_OAUTH_CLIENT_ID,
+            scope: 'openid profile email',
+        }),
+        signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`refresh_failed:${res.status}`);
+    const tok = await res.json();
+    if (!tok.access_token) throw new Error('refresh_failed:no_access_token');
+    d.tokens.access_token = tok.access_token;
+    if (tok.id_token)      d.tokens.id_token = tok.id_token;
+    if (tok.refresh_token) d.tokens.refresh_token = tok.refresh_token;
+    d.last_refresh = new Date().toISOString();
+    atomicWriteJson(credPath, d);
+    console.log('[BatRadar][Codex] Token refreshed');
+    return { token: d.tokens.access_token, accountId: d.tokens.account_id };
+}
+
+// One refresh attempt per provider per 5 minutes — a rejected fresh token
+// means re-login is genuinely needed, don't hammer the auth server
+async function tryRefresh(provider, st) {
+    const now = Date.now();
+    if (now - (st.lastRefreshAt || 0) < 5 * 60 * 1000) return false;
+    st.lastRefreshAt = now;
+    try {
+        console.log(`[BatRadar][${provider}] Access token expired — attempting refresh…`);
+        if (provider === 'claude') await refreshClaudeToken();
+        else await refreshCodexToken();
+        return true;
+    } catch (e) {
+        console.error(`[BatRadar][${provider}] Refresh failed:`, e.message);
+        return false;
+    }
+}
+
 // ─── Claude API ───────────────────────────────────────────────────────────────
 async function fetchClaudeUsage(token) {
     const isApiKey = token.startsWith('sk-ant-api');
@@ -168,7 +261,8 @@ function parseClaudeUsage(raw) {
     const win = (k) => {
         const o = raw[k];
         if (!o || o.utilization == null) return null;
-        const util = o.utilization > 1 ? o.utilization / 100 : o.utilization;
+        // API returns utilization as a percentage (0-100)
+        const util = o.utilization / 100;
         return {
             utilization: Math.min(1, util),
             reset_at: o.resets_at || o.reset_at || null,
@@ -184,7 +278,7 @@ function parseClaudeUsage(raw) {
             ? {
                 spend: eu.used_credits != null ? eu.used_credits / 100 : 0,
                 limit: eu.monthly_limit != null ? eu.monthly_limit / 100 : 0,
-                utilization: eu.utilization != null ? (eu.utilization > 1 ? eu.utilization / 100 : eu.utilization) : 0,
+                utilization: eu.utilization != null ? eu.utilization / 100 : 0,
                 currency: eu.currency || 'USD',
             }
             : null,
@@ -198,6 +292,8 @@ async function fetchCodexUsage(token, accountId) {
     const urls = [
         'https://chatgpt.com/backend-api/wham/usage',
     ];
+    let sawAuthError = false;
+    let lastErr = null;
     for (const url of urls) {
         try {
             console.log(`[BatRadar][Codex] Trying ${url}`);
@@ -215,6 +311,7 @@ async function fetchCodexUsage(token, accountId) {
             if (res.status === 429) throw new Error('rate_limited');
             // Try next URL on 401/403
             if (res.status === 401 || res.status === 403) {
+                sawAuthError = true;
                 const body = await res.text().catch(() => '');
                 console.log(`[BatRadar][Codex] ${res.status} body:`, body.substring(0, 200));
                 continue;
@@ -222,10 +319,14 @@ async function fetchCodexUsage(token, accountId) {
             throw new Error(`api_error:${res.status}`);
         } catch (err) {
             if (err.message === 'rate_limited') throw err;
+            lastErr = err;
             console.error(`[BatRadar][Codex] ${url} failed:`, err.message);
         }
     }
-    throw new Error('token_expired');
+    // Only report an expired token when the API actually rejected it —
+    // network failures / 5xx must surface as generic errors, not "expired"
+    if (sawAuthError) throw new Error('token_expired');
+    throw lastErr || new Error('api_error:unknown');
 }
 
 function parseCodexUsage(raw) {
@@ -276,7 +377,9 @@ const WP = {
 const APP_ICON = path.join(ICONS_DIR, 'icon.ico');
 
 function makeWin(opts, file) {
-    const w = new BrowserWindow({ icon: APP_ICON, ...opts, webPreferences: WP });
+    // Dark base layer — without it the window flashes white on show/activate
+    // before Chromium paints the UI
+    const w = new BrowserWindow({ icon: APP_ICON, backgroundColor: '#0a0a0f', ...opts, webPreferences: WP });
     w.loadFile(path.join(SRC_DIR, file));
     w.setMenuBarVisibility(false);
     return w;
@@ -288,12 +391,21 @@ function createFloating() {
     const SIZE = 62;
     floatWin = new BrowserWindow({
         width: SIZE, height: SIZE, x, y,
-        title: '', frame: false, transparent: false,
-        backgroundColor: '#0f0f1a', alwaysOnTop: true,
+        // Truly transparent window: the circle is drawn by CSS with
+        // antialiased edges — no black fringing on light backgrounds
+        title: '', frame: false, transparent: true,
+        backgroundColor: '#00000000',
+        alwaysOnTop: true,
+        // Never take focus: prevents the white DWM caption strip on activation,
+        // keeps the icon out of Alt+Tab, and stops it stealing focus from the
+        // app the user is working in. Mouse events still work.
+        focusable: false,
         skipTaskbar: true, resizable: false, movable: false,
         hasShadow: false, roundedCorners: false,
         icon: APP_ICON,
-        webPreferences: WP,
+        // Never throttle the overlay's renderer — a throttled transparent
+        // window repaints as a white rectangle until the next frame
+        webPreferences: { ...WP, backgroundThrottling: false },
     });
     floatWin.loadFile(path.join(SRC_DIR, 'floating.html'));
     floatWin.setMenuBarVisibility(false);
@@ -314,19 +426,15 @@ function createFloating() {
             }
         }, 1000);
     });
-    // Circular shape
-    const cx = SIZE / 2, cy = SIZE / 2, R = SIZE / 2;
-    const rects = [];
-    for (let row = 0; row < SIZE; row++) {
-        const dy = row - cy + 0.5;
-        const halfW = Math.sqrt(Math.max(0, R * R - dy * dy));
-        if (halfW > 0) {
-            const x0 = Math.floor(cx - halfW);
-            const x1 = Math.ceil(cx + halfW);
-            rects.push({ x: x0, y: row, width: x1 - x0, height: 1 });
-        }
-    }
-    floatWin.setShape(rects);
+    // Keep-alive repaint: Chromium evicts the last frame of small occluded
+    // windows during window switching, leaving the white base layer on screen.
+    // The icon is static between polls, so force a fresh frame continuously —
+    // at 62x62 px the cost is negligible and any white flash heals in ~300ms.
+    setInterval(() => {
+        if (floatWin && !floatWin.isDestroyed() && floatWin.isVisible())
+            floatWin.webContents.invalidate();
+    }, 300);
+
     floatWin.on('moved', () => {
         const [px, py] = floatWin.getPosition();
         const c = loadConfig(); c.floating_position = { x: px, y: py }; saveConfig(c);
@@ -377,8 +485,9 @@ const providerState = {
 async function pollClaude() {
     const st = providerState.claude;
     const now = Date.now();
-    // Rate limit guard: minimum 30s between API calls
-    if (now - st.lastPollAt < 30000) {
+    // Rate limit guard: minimum 30s between API calls, plus backoff after 429
+    const minGap = 30000 + (st.extraDelay || 0) * 1000;
+    if (now - st.lastPollAt < minGap) {
         console.log('[BatRadar][Claude] Skipped — too soon since last poll');
         return;
     }
@@ -400,6 +509,10 @@ async function pollClaude() {
     } catch (err) {
         console.error('[BatRadar][Claude] Error:', err.message);
         if (err.message === 'token_expired') {
+            if (getClaudeAuthMethod() === 'oauth' && await tryRefresh('claude', st)) {
+                st.lastPollAt = 0;      // retry immediately with the fresh token
+                return pollClaude();    // a second 401 falls through to 'expired' (refresh is rate-limited)
+            }
             broadcast('provider-status-changed', { provider: 'claude', status: 'expired' });
         } else if (err.message === 'rate_limited') {
             st.extraDelay = Math.min((st.extraDelay || 30) * 2, 300);
@@ -414,7 +527,8 @@ async function pollCodex() {
     const st = providerState.codex;
     const now = Date.now();
     console.log(`[BatRadar][Codex] Polling... lastPollAt=${st.lastPollAt}, diff=${now - st.lastPollAt}ms`);
-    if (st.lastPollAt > 0 && now - st.lastPollAt < 30000) {
+    const minGap = 30000 + (st.extraDelay || 0) * 1000;
+    if (st.lastPollAt > 0 && now - st.lastPollAt < minGap) {
         console.log('[BatRadar][Codex] Skipped — too soon since last poll');
         return;
     }
@@ -438,6 +552,10 @@ async function pollCodex() {
     } catch (err) {
         console.error('[BatRadar][Codex] Error:', err.message);
         if (err.message === 'token_expired') {
+            if (await tryRefresh('codex', st)) {
+                st.lastPollAt = 0;      // retry immediately with the fresh token
+                return pollCodex();     // a second 401 falls through to 'expired' (refresh is rate-limited)
+            }
             broadcast('provider-status-changed', { provider: 'codex', status: 'expired' });
         } else if (err.message === 'rate_limited') {
             st.extraDelay = Math.min((st.extraDelay || 30) * 2, 300);
@@ -536,7 +654,9 @@ function setupIPC() {
 
     ipcMain.handle('load_settings', () => loadConfig());
     ipcMain.handle('save_settings', (_, { settings }) => {
-        saveConfig(settings);
+        // Merge onto current config so keys the settings UI doesn't own
+        // (display_providers, floating_position, enabled_providers…) survive
+        saveConfig({ ...loadConfig(), ...settings });
         app.setLoginItemSettings({ openAtLogin: !!settings.autostart });
         stopPolling(); startPolling();
     });
@@ -583,7 +703,8 @@ function setupIPC() {
         cfg.enabled_providers = (cfg.enabled_providers || ['claude', 'codex'])
             .filter(p => p !== provider);
         saveConfig(cfg);
-        if (provider === 'claude') deleteManualApiKey();
+        // Keep the saved API key — disconnect only pauses monitoring,
+        // matching the confirm dialog's promise. Use remove_api_key to delete it.
         if (providerState[provider]) {
             providerState[provider].cache = null;
             providerState[provider].alertSt = {};

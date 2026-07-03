@@ -19,6 +19,9 @@ body {
 }
 
 .header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
@@ -35,7 +38,7 @@ body {
 
 /* Section */
 .section-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -66,15 +69,15 @@ body {
 }
 
 .help-btn:hover {
-  background: var(--accent-claude);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--accent-claude);
+  border-color: var(--accent);
 }
 
 .help-btn.active {
-  background: var(--accent-claude);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--accent-claude);
+  border-color: var(--accent);
 }
 
 /* Help panel */
@@ -98,6 +101,9 @@ body {
 }
 
 .help-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
@@ -133,7 +139,7 @@ body {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 10px;
-  color: var(--accent-claude);
+  color: var(--accent);
 }
 
 .help-link {
@@ -206,7 +212,7 @@ body {
 }
 
 .setting-desc {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   margin-top: 1px;
 }
@@ -242,8 +248,8 @@ body {
 }
 
 .toggle input:checked + .toggle-slider {
-  background: var(--accent-claude);
-  border-color: var(--accent-claude);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .toggle input:checked + .toggle-slider:before {
@@ -264,7 +270,7 @@ select {
   outline: none;
 }
 
-select:focus { border-color: var(--accent-claude); }
+select:focus { border-color: var(--accent); }
 
 /* Footer */
 .footer {
