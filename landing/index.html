@@ -1,0 +1,2729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BatRadar — Monitor your Claude Code &amp; Codex usage</title>
+<meta name="description" content="Lightweight Windows overlay that shows your Claude Code and Codex usage in real time. Free, MIT licensed, no telemetry." />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="BatRadar — Know your AI coding limits before you hit them" />
+<meta property="og:description" content="A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises." />
+<meta property="og:image" content="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png" />
+<meta property="og:url" content="https://zenithhawking.github.io/BatRadar/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="BatRadar — Monitor your Claude Code &amp; Codex usage" />
+<meta name="twitter:description" content="A lightweight Windows overlay. Free, MIT licensed, no telemetry." />
+<meta name="twitter:image" content="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png" />
+
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/icon-nobr.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============ TOKENS ============ */
+  :root {
+    --bg-deep: #0a0a0f;
+    --bg-elevated: #13131a;
+    --bg-elevated-2: #1c1c26;
+    --border: #2a2a38;
+    --border-bright: #3a3a4d;
+    --text-primary: #f5f5f7;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --accent: #a855f7;
+    --accent-hover: #c084fc;
+    --accent-dim: rgba(168, 85, 247, 0.55);
+    --accent-glow: rgba(168, 85, 247, 0.35);
+    --accent-faint: rgba(168, 85, 247, 0.08);
+    --success: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --radius-sm: 6px;
+    --radius: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+
+    --shell-w: 1200px;
+
+    --ease-out: cubic-bezier(.2, .7, .2, 1);
+    --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  }
+
+  /* ============ RESET ============ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); }
+  button { font-family: inherit; }
+  ::selection { background: var(--accent); color: #0a0a0f; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+  .shell { width: 100%; max-width: var(--shell-w); margin: 0 auto; padding: 0 24px; }
+  .mono { font-family: var(--font-mono); }
+  code, kbd {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--bg-elevated-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text-primary);
+  }
+
+  /* ============ GLOBAL EFFECTS ============ */
+  .cursor-glow {
+    position: fixed;
+    top: 0; left: 0;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0) 60%);
+    pointer-events: none;
+    z-index: 1;
+    transform: translate(-50%, -50%) translate3d(-9999px, -9999px, 0);
+    transition: opacity 240ms ease;
+    mix-blend-mode: screen;
+    will-change: transform;
+  }
+  .cursor-glow.is-hidden { opacity: 0; }
+  @media (hover: none), (max-width: 768px) { .cursor-glow { display: none; } }
+
+  /* Grain overlay — extremely subtle */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.9'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  /* ============ SCROLL REVEAL ============ */
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out); }
+  .reveal.is-visible { opacity: 1; transform: none; }
+  .reveal--delay-1 { transition-delay: 80ms; }
+  .reveal--delay-2 { transition-delay: 160ms; }
+  .reveal--delay-3 { transition-delay: 240ms; }
+  .reveal--delay-4 { transition-delay: 320ms; }
+
+  /* ============ NAVIGATION ============ */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10, 10, 15, 0.5);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border-bottom: 1px solid transparent;
+    transition: all 300ms var(--ease-out);
+  }
+  .nav.is-stuck {
+    background: rgba(10, 10, 15, 0.82);
+    border-bottom-color: var(--border);
+  }
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    height: 70px;
+    transition: height 300ms var(--ease-out);
+  }
+  .nav.is-stuck .nav__inner { height: 60px; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    font-size: 17px;
+  }
+  .brand img { width: 30px; height: 30px; filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.5)); }
+  .brand__version {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-faint);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 2px;
+  }
+  .nav__links {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+    font-size: 14px;
+  }
+  .nav__section-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 26px;
+    margin-right: 6px;
+  }
+  .nav__links a { color: var(--text-secondary); font-weight: 500; transition: color 150ms ease; }
+  .nav__links a:hover { color: var(--text-primary); }
+
+  .stars-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px 6px 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    transition: all 200ms ease;
+  }
+  .stars-badge:hover { color: var(--text-primary); border-color: var(--accent-dim); background: var(--bg-elevated-2); }
+  .stars-badge svg { width: 14px; height: 14px; color: var(--warn); }
+  .stars-badge .star-count { color: var(--text-primary); font-weight: 600; }
+  .stars-badge.is-loading .star-count::after { content: "—"; opacity: 0.5; }
+
+  .nav__icon-link {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    color: var(--text-secondary);
+    transition: all 150ms ease;
+  }
+  .nav__icon-link:hover { color: var(--text-primary); background: var(--bg-elevated); }
+  .nav__icon-link svg { width: 18px; height: 18px; }
+
+  .lang-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    border-radius: 999px;
+    padding: 3px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .lang-toggle button {
+    background: transparent; border: 0;
+    color: var(--text-muted);
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+  .lang-toggle button.is-active { background: var(--accent); color: #0a0a0f; }
+  .lang-toggle button:not(.is-active):hover { color: var(--text-primary); }
+
+  @media (max-width: 880px) {
+    .nav__section-links { display: none; }
+    .stars-badge .star-count + .star-label { display: none; }
+  }
+  @media (max-width: 480px) {
+    .nav__inner { height: 60px; gap: 10px; }
+    .brand__version { display: none; }
+    .stars-badge { display: none; }
+  }
+
+  /* ============ BUTTONS ============ */
+  .btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 22px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 15px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 250ms var(--ease-out);
+    text-decoration: none;
+    line-height: 1;
+    min-height: 44px;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .btn--primary {
+    background: var(--accent);
+    color: #0a0a0f;
+    box-shadow: 0 8px 24px -8px var(--accent-glow), 0 0 0 1px rgba(168, 85, 247, 0.3);
+  }
+  .btn--primary::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: radial-gradient(120px 60px at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.25), transparent 70%);
+    opacity: 0;
+    transition: opacity 200ms ease;
+    z-index: -1;
+  }
+  .btn--primary:hover {
+    background: var(--accent-hover);
+    color: #0a0a0f;
+    box-shadow: 0 12px 40px var(--accent-glow), 0 0 0 1px rgba(192, 132, 252, 0.55);
+    transform: translateY(-1px);
+  }
+  .btn--primary:hover::before { opacity: 1; }
+  .btn--ghost {
+    background: rgba(255,255,255,0.02);
+    color: var(--text-primary);
+    border-color: var(--border-bright);
+  }
+  .btn--ghost:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent-dim);
+  }
+  .btn--lg { padding: 18px 32px; font-size: 16px; }
+
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    padding: 56px 0 88px;
+    overflow: hidden;
+  }
+  /* Aurora layer */
+  .aurora {
+    position: absolute;
+    inset: -10% -5% 0 -5%;
+    z-index: 0;
+    pointer-events: none;
+    filter: blur(80px) saturate(140%);
+    opacity: 0.55;
+  }
+  .aurora__blob {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform;
+  }
+  .aurora__blob--1 {
+    top: -10%; left: -5%; width: 540px; height: 540px;
+    background: radial-gradient(circle, #a855f7 0%, transparent 65%);
+    animation: aurora-1 22s var(--ease-in-out) infinite;
+  }
+  .aurora__blob--2 {
+    top: 10%; right: -8%; width: 480px; height: 480px;
+    background: radial-gradient(circle, #6d28d9 0%, transparent 65%);
+    animation: aurora-2 28s var(--ease-in-out) infinite;
+  }
+  .aurora__blob--3 {
+    bottom: -20%; left: 30%; width: 600px; height: 600px;
+    background: radial-gradient(circle, #2563eb 0%, transparent 65%);
+    opacity: 0.4;
+    animation: aurora-3 32s var(--ease-in-out) infinite;
+  }
+  @keyframes aurora-1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(80px, 40px) scale(1.15); }
+  }
+  @keyframes aurora-2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-60px, 80px) scale(0.9); }
+  }
+  @keyframes aurora-3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-100px, -60px) scale(1.1); }
+  }
+  /* Grid hint */
+  .hero::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(168, 85, 247, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168, 85, 247, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 60% at 20% 50%, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 20% 50%, black 30%, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hero__inner {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: 56px;
+    align-items: center;
+  }
+  .hero__copy { max-width: 600px; }
+  .hero__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    padding: 7px 13px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    background: var(--accent-faint);
+    border-radius: 999px;
+    margin-bottom: 24px;
+    backdrop-filter: blur(6px);
+  }
+  .hero__eyebrow .blip {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent), 0 0 0 0 var(--accent-glow);
+    animation: blip 1.8s var(--ease-in-out) infinite;
+  }
+  @keyframes blip {
+    0%, 100% { box-shadow: 0 0 12px var(--accent), 0 0 0 0 var(--accent-glow); opacity: 1; }
+    50% { box-shadow: 0 0 18px var(--accent), 0 0 0 8px rgba(168, 85, 247, 0); opacity: 0.7; }
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(40px, 6vw, 76px);
+    line-height: 1.0;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    margin: 0 0 24px;
+  }
+  .hero h1 .hl {
+    color: var(--accent);
+    text-shadow: 0 0 32px var(--accent-glow);
+    position: relative;
+  }
+  .hero h1 .hl::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -2px;
+    height: 6px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+    filter: blur(4px);
+  }
+  .hero__sub {
+    font-size: 18px;
+    color: var(--text-secondary);
+    margin: 0 0 36px;
+    max-width: 520px;
+    line-height: 1.55;
+  }
+  .hero__cta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .hero__meta {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .hero__meta .sep { color: var(--border-bright); }
+  .hero__source { margin-top: 18px; font-size: 14px; color: var(--text-secondary); }
+  .hero__source a {
+    color: var(--text-primary);
+    border-bottom: 1px dashed var(--border-bright);
+    padding-bottom: 1px;
+  }
+  .hero__source a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ============ HERO VISUAL — Live dashboard ============ */
+  .hero__visual { position: relative; }
+  .radar {
+    position: absolute;
+    inset: -8% -10% -8% -2%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.7;
+  }
+  .radar__rings {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at center,
+      transparent 0 18%,
+      rgba(168,85,247,0.10) 18.5% 19%, transparent 19% 32%,
+      rgba(168,85,247,0.08) 32.5% 33%, transparent 33% 48%,
+      rgba(168,85,247,0.06) 48.5% 49%, transparent 49% 66%,
+      rgba(168,85,247,0.04) 66.5% 67%, transparent 67%);
+  }
+  .radar__sweep {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+      rgba(168, 85, 247, 0) 0deg,
+      rgba(168, 85, 247, 0) 320deg,
+      rgba(168, 85, 247, 0.3) 358deg,
+      rgba(168, 85, 247, 0.55) 360deg);
+    mask-image: radial-gradient(circle, black 0 67%, transparent 67%);
+    -webkit-mask-image: radial-gradient(circle, black 0 67%, transparent 67%);
+    animation: sweep 6s linear infinite;
+    filter: blur(2px);
+  }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+
+  /* Live dashboard panel */
+  .dash {
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(28,28,38,0.95), rgba(19,19,26,0.95));
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, 0.55),
+      0 0 60px rgba(168, 85, 247, 0.18),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+    transform: perspective(1400px) rotateY(-6deg) rotateX(2deg) rotate(-2deg);
+    transform-origin: center;
+    transition: transform 600ms var(--ease-out);
+    overflow: hidden;
+  }
+  .dash:hover { transform: perspective(1400px) rotateY(-3deg) rotateX(1deg) rotate(-1deg) translateY(-4px); }
+  .dash__chrome {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10, 10, 15, 0.5);
+  }
+  .dash__dots { display: flex; gap: 6px; }
+  .dash__dots span {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--border-bright);
+  }
+  .dash__dots span:nth-child(1) { background: #ef4444; }
+  .dash__dots span:nth-child(2) { background: #f59e0b; }
+  .dash__dots span:nth-child(3) { background: #22c55e; }
+  .dash__title {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-left: 6px;
+  }
+  .dash__live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--success);
+    padding: 3px 8px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 999px;
+  }
+  .dash__live .pulse {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: blip 1.6s var(--ease-in-out) infinite;
+  }
+  .dash__body { padding: 22px 22px 20px; }
+  .dash__section-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .dash__section-h h4 {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .dash__time {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+  }
+  .dash-row {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+  }
+  .dash-row + .dash-row { border-top: 1px solid rgba(255,255,255,0.03); }
+  .dash-row__logo {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-secondary);
+  }
+  .dash-row__logo img { width: 70%; height: 70%; object-fit: contain; }
+  .dash-row__name {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dash-row__name .meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); font-weight: 400; }
+  .dash-row__bar {
+    height: 6px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+  .dash-row__fill {
+    height: 100%;
+    background: var(--success);
+    width: 0%;
+    border-radius: 999px;
+    transition: width 1.2s var(--ease-out), background 600ms ease;
+    box-shadow: 0 0 10px currentColor;
+    position: relative;
+  }
+  .dash-row__fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 2.4s linear infinite;
+  }
+  @keyframes shimmer { to { transform: translateX(100%); } }
+  .dash-row__pct {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 44px;
+    text-align: right;
+  }
+  .dash-foot {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    text-align: center;
+  }
+  .dash-foot__cell {
+    padding: 6px 0;
+  }
+  .dash-foot__val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .dash-foot__lbl {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 3px;
+  }
+
+  /* Floating bat preview */
+  .hero__float {
+    position: absolute;
+    bottom: -22px; left: -28px;
+    width: 100px; height: 100px;
+    z-index: 3;
+    background: linear-gradient(180deg, #1c1c26, #13131a);
+    border: 1px solid var(--accent-dim);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    box-shadow:
+      0 18px 50px rgba(168, 85, 247, 0.4),
+      0 0 0 5px rgba(10, 10, 15, 0.85),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    animation: float 4s var(--ease-in-out) infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .hero__float img { width: 60%; height: 60%; object-fit: contain; filter: drop-shadow(0 0 8px var(--accent-glow)); }
+  .hero__float-percent {
+    position: absolute;
+    bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--success);
+    background: rgba(0,0,0,0.7);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  @media (max-width: 1024px) {
+    .hero__inner { grid-template-columns: 1fr; gap: 56px; }
+    .hero__visual { max-width: 540px; margin: 0 auto; }
+    .dash { transform: perspective(1400px) rotateY(-2deg) rotate(-1.5deg); }
+  }
+  @media (max-width: 640px) {
+    .hero { padding: 36px 0 60px; }
+    .hero__sub { font-size: 16px; margin-bottom: 28px; }
+    .hero__float { width: 72px; height: 72px; bottom: -14px; left: -14px; }
+    .dash__body { padding: 18px 16px 16px; }
+  }
+  @media (max-width: 480px) {
+    .hero__cta { flex-direction: column; align-items: stretch; width: 100%; }
+    .hero__cta .btn { width: 100%; }
+    .dash-foot { gap: 6px; }
+    .dash-foot__val { font-size: 12.5px; }
+  }
+
+  /* ============ STATS STRIP ============ */
+  .stats {
+    position: relative;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background:
+      linear-gradient(180deg, rgba(168,85,247,0.04), transparent 50%, rgba(168,85,247,0.04)),
+      var(--bg-deep);
+  }
+  .stats__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    padding: 32px 0;
+  }
+  .stat {
+    text-align: center;
+    padding: 12px 16px;
+    position: relative;
+  }
+  .stat + .stat::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 20%; bottom: 20%;
+    width: 1px;
+    background: var(--border);
+  }
+  .stat__val {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .stat__val .unit {
+    color: var(--accent);
+    font-size: 0.65em;
+    margin-left: 2px;
+    text-shadow: 0 0 16px var(--accent-glow);
+  }
+  .stat__lbl {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+  }
+  @media (max-width: 640px) {
+    .stats__grid { grid-template-columns: repeat(2, 1fr); padding: 20px 0; }
+    .stat:nth-child(odd) + .stat::before { display: block; }
+    .stat:nth-child(3)::before, .stat:nth-child(4)::before {
+      content: ""; position: absolute; left: 10%; right: 10%; top: 0; height: 1px; background: var(--border); width: auto;
+    }
+  }
+
+  /* ============ SECTIONS ============ */
+  section { position: relative; padding: 96px 0; }
+  .sec-head { text-align: center; margin-bottom: 56px; }
+  .sec-head__eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .sec-head__eyebrow::before, .sec-head__eyebrow::after {
+    content: "";
+    width: 24px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim));
+  }
+  .sec-head__eyebrow::after { background: linear-gradient(90deg, var(--accent-dim), transparent); }
+  .sec-head h2 {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 4vw, 48px);
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    margin: 0;
+    line-height: 1.05;
+  }
+  .sec-head p {
+    color: var(--text-secondary);
+    margin: 16px auto 0;
+    max-width: 580px;
+    font-size: 16.5px;
+  }
+  @media (max-width: 768px) { section { padding: 72px 0; } .sec-head { margin-bottom: 40px; } }
+
+  /* ============ SCREENSHOTS ============ */
+  #screenshots { background: linear-gradient(180deg, var(--bg-deep), #0d0d14); }
+  .shots-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .shot-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all 250ms var(--ease-out);
+    cursor: zoom-in;
+  }
+  .shot-card:hover {
+    border-color: var(--accent-dim);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.45), 0 0 32px rgba(168,85,247,0.15);
+  }
+  .shot-card__chrome {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10, 10, 15, 0.5);
+  }
+  .shot-card__chrome .dots { display: flex; gap: 5px; }
+  .shot-card__chrome .dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border-bright);
+  }
+  .shot-card__chrome .dots span:nth-child(1) { background: #ef4444; }
+  .shot-card__chrome .dots span:nth-child(2) { background: #f59e0b; }
+  .shot-card__chrome .dots span:nth-child(3) { background: #22c55e; }
+  .shot-card__chrome .url {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    flex: 1;
+    text-align: center;
+    background: var(--bg-elevated-2);
+    padding: 3px 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shot-card__frame {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background:
+      repeating-linear-gradient(45deg, rgba(168,85,247,0.04) 0 14px, transparent 14px 28px),
+      var(--bg-elevated-2);
+    overflow: hidden;
+  }
+  .shot-card__frame img {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 600ms var(--ease-out);
+  }
+  .shot-card:hover .shot-card__frame img { transform: scale(1.03); }
+  .shot-card__cap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .shot-card__cap-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+  .shot-card__cap-text {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  @media (max-width: 768px) { .shots-grid { grid-template-columns: 1fr; gap: 18px; } }
+
+  /* ============ BENTO FEATURES ============ */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: minmax(220px, auto);
+    gap: 18px;
+  }
+  .bento > * {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    transition: all 260ms var(--ease-out);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bento > *::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 260ms;
+  }
+  .bento > *:hover {
+    background: var(--bg-elevated-2);
+    border-color: var(--accent-dim);
+    transform: translateY(-3px);
+  }
+  .bento > *:hover::before { opacity: 1; }
+
+  .bento__icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: var(--accent-faint);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+  }
+  .bento__icon svg { width: 20px; height: 20px; }
+  .bento h3 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .bento p {
+    color: var(--text-secondary);
+    font-size: 14.5px;
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  /* Bento layout */
+  .b-overlay  { grid-column: span 3; grid-row: span 2; }
+  .b-dash     { grid-column: span 3; grid-row: span 1; }
+  .b-polling  { grid-column: span 3; grid-row: span 1; }
+  .b-alerts   { grid-column: span 2; grid-row: span 1; }
+  .b-auth     { grid-column: span 2; grid-row: span 1; }
+  .b-private  { grid-column: span 2; grid-row: span 1; }
+
+  /* Overlay demo */
+  .demo-overlay {
+    flex: 1;
+    margin-top: 8px;
+    position: relative;
+    border-radius: var(--radius);
+    background:
+      radial-gradient(circle at 30% 20%, rgba(168,85,247,0.12), transparent 60%),
+      repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 14px, transparent 14px 28px),
+      var(--bg-deep);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    min-height: 200px;
+  }
+  .demo-overlay__taskbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 28px;
+    background: linear-gradient(180deg, rgba(28,28,38,0.6), rgba(19,19,26,0.9));
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .demo-overlay__taskbar span {
+    width: 14px; height: 14px;
+    background: var(--border-bright);
+    border-radius: 3px;
+    opacity: 0.6;
+  }
+  .demo-overlay__bat {
+    position: absolute;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #1c1c26, #13131a);
+    border: 2px solid var(--success);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 12px 30px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: all 800ms var(--ease-out);
+    cursor: grab;
+    user-select: none;
+  }
+  .demo-overlay__bat:active { cursor: grabbing; }
+  .demo-overlay__bat img { width: 60%; height: 60%; object-fit: contain; }
+  .demo-overlay__pct {
+    position: absolute;
+    bottom: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(0,0,0,0.7);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--success);
+  }
+  .demo-overlay__hint {
+    position: absolute;
+    top: 12px; right: 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 999px;
+    pointer-events: none;
+  }
+
+  /* Polling demo */
+  .demo-poll {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .demo-poll__circle {
+    --p: 0;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background:
+      conic-gradient(var(--accent) calc(var(--p) * 1%), rgba(168,85,247,0.12) 0);
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .demo-poll__circle::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    background: var(--bg-elevated);
+    border-radius: 50%;
+  }
+  .demo-poll__circle span {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    position: relative;
+  }
+  .demo-poll__txt { flex: 1; }
+  .demo-poll__txt b {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .demo-poll__txt small {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+  }
+  .demo-poll__icon {
+    width: 20px; height: 20px;
+    color: var(--accent);
+    animation: spin 2.5s linear infinite;
+    flex: 0 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Mini dashboard demo */
+  .demo-bars {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .demo-bars__row {
+    display: grid;
+    grid-template-columns: 60px 1fr 40px;
+    gap: 8px;
+    align-items: center;
+  }
+  .demo-bars__lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+  .demo-bars__track {
+    height: 4px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .demo-bars__fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 800ms var(--ease-out), background 400ms ease;
+  }
+  .demo-bars__pct {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: right;
+  }
+
+  /* Smart alerts demo */
+  .demo-toast {
+    margin-top: auto;
+    background: linear-gradient(180deg, rgba(28,28,38,0.95), rgba(19,19,26,0.95));
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warn);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+    animation: toast-in 4s var(--ease-in-out) infinite;
+  }
+  @keyframes toast-in {
+    0%, 100% { opacity: 0; transform: translateX(20px); }
+    10%, 90% { opacity: 1; transform: translateX(0); }
+  }
+  .demo-toast__icon {
+    width: 28px; height: 28px;
+    background: rgba(245, 158, 11, 0.15);
+    border-radius: 6px;
+    color: var(--warn);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .demo-toast__icon svg { width: 14px; height: 14px; }
+  .demo-toast__body { flex: 1; min-width: 0; }
+  .demo-toast__title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .demo-toast__body small {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Zero-config demo (terminal-ish) */
+  .demo-term {
+    margin-top: auto;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.7;
+  }
+  .demo-term .prompt { color: var(--accent); }
+  .demo-term .cmd { color: var(--text-primary); }
+  .demo-term .out { color: var(--text-muted); font-size: 10.5px; }
+  .demo-term .ok { color: var(--success); }
+  .demo-term .cur {
+    display: inline-block;
+    width: 7px; height: 12px;
+    background: var(--accent);
+    vertical-align: middle;
+    margin-left: 2px;
+    animation: cursor-blink 1s steps(2) infinite;
+  }
+  @keyframes cursor-blink { 50% { opacity: 0; } }
+
+  /* Private demo */
+  .demo-private {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .demo-private__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .demo-private__row .x {
+    color: var(--danger);
+    font-weight: 700;
+  }
+  .demo-private__row .ok { color: var(--success); font-weight: 700; }
+  .demo-private__row.strike { text-decoration: line-through; opacity: 0.7; }
+
+  @media (max-width: 980px) {
+    .bento { grid-template-columns: repeat(4, 1fr); }
+    .b-overlay { grid-column: span 4; grid-row: span 1; }
+    .b-dash, .b-polling { grid-column: span 2; }
+    .b-alerts, .b-auth, .b-private { grid-column: span 2; }
+  }
+  @media (max-width: 600px) {
+    .bento { grid-template-columns: 1fr; grid-auto-rows: auto; }
+    .bento > * { grid-column: span 1 !important; padding: 22px; min-height: 200px; }
+  }
+
+  /* ============ PROVIDERS ============ */
+  #providers { background: linear-gradient(180deg, #0d0d14, var(--bg-deep)); }
+  .providers-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .provider-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all 250ms var(--ease-out);
+    position: relative;
+    overflow: hidden;
+  }
+  .provider-card::after {
+    content: "";
+    position: absolute;
+    top: -40%; right: -30%;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, var(--card-glow, rgba(168,85,247,0.2)), transparent 60%);
+    pointer-events: none;
+    opacity: 0.5;
+    transition: opacity 250ms;
+  }
+  .provider-card:hover {
+    border-color: var(--accent-dim);
+    transform: translateY(-3px);
+  }
+  .provider-card:hover::after { opacity: 0.9; }
+  .provider-card[data-glow="claude"] { --card-glow: rgba(212, 132, 90, 0.25); }
+  .provider-card[data-glow="codex"] { --card-glow: rgba(255, 255, 255, 0.12); }
+  .provider-card[data-glow="gemini"] { --card-glow: rgba(101, 121, 245, 0.25); }
+
+  .provider-card__head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .provider-card__logo {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .provider-card__logo img { width: 70%; height: 70%; object-fit: contain; }
+  .provider-card__name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 500;
+    align-self: flex-start;
+  }
+  .status-pill--live { background: rgba(34, 197, 94, 0.12); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
+  .status-pill--soon { background: rgba(245, 158, 11, 0.1); color: var(--warn); border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .provider-card__auth {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .provider-card__auth small { display: block; color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  @media (max-width: 768px) { .providers-grid { grid-template-columns: 1fr; } }
+
+  /* ============ QUICK START ============ */
+  .qs-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+  .qs-step {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    position: relative;
+    transition: all 250ms var(--ease-out);
+  }
+  .qs-step:hover { border-color: var(--accent-dim); }
+  .qs-step__num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .qs-step__num::before {
+    content: "";
+    width: 22px; height: 1px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+  .qs-step__body { font-size: 15px; line-height: 1.55; }
+  .qs-step__body strong { font-weight: 700; color: var(--text-primary); }
+
+  .qs-note {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 16px 24px;
+    background: var(--bg-elevated);
+    border: 1px dashed var(--border-bright);
+    border-radius: var(--radius);
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  @media (max-width: 768px) { .qs-grid { grid-template-columns: 1fr; } }
+
+  /* ============ FAQ ============ */
+  #faq { background: linear-gradient(180deg, var(--bg-deep), #0d0d14); }
+  .faq {
+    max-width: 820px;
+    margin: 0 auto;
+    border-top: 1px solid var(--border);
+  }
+  .faq-item { border-bottom: 1px solid var(--border); transition: background 200ms; }
+  .faq-item[open] { background: rgba(168, 85, 247, 0.02); }
+  .faq-item summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 24px 8px;
+    font-size: 16.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: color 150ms;
+    font-family: var(--font-display);
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary:hover { color: var(--accent); }
+  .faq-item summary::after {
+    content: "";
+    width: 14px; height: 14px;
+    border-right: 1.5px solid var(--text-muted);
+    border-bottom: 1.5px solid var(--text-muted);
+    transform: rotate(45deg) translate(-3px, -3px);
+    transition: transform 250ms var(--ease-out), border-color 200ms;
+    flex: 0 0 auto;
+  }
+  .faq-item[open] summary::after {
+    transform: rotate(-135deg) translate(-3px, -3px);
+    border-color: var(--accent);
+  }
+  .faq-item__body { padding: 0 8px 28px; color: var(--text-secondary); font-size: 15px; line-height: 1.65; }
+
+  /* ============ FINAL CTA ============ */
+  .final-cta {
+    text-align: center;
+    padding: 130px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .final-cta::before {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 1000px; height: 1000px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.18), rgba(168, 85, 247, 0) 55%);
+    pointer-events: none;
+  }
+  .final-cta::after {
+    /* Concentric rings */
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 800px; height: 800px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at center,
+      transparent 0 28%,
+      rgba(168,85,247,0.08) 28.2% 28.6%, transparent 28.6% 42%,
+      rgba(168,85,247,0.06) 42.2% 42.6%, transparent 42.6% 58%,
+      rgba(168,85,247,0.04) 58.2% 58.6%, transparent 58.6%);
+    pointer-events: none;
+  }
+  .final-cta__inner { position: relative; z-index: 1; }
+  .final-cta h2 {
+    font-family: var(--font-display);
+    font-size: clamp(36px, 5.4vw, 64px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin: 0 0 40px;
+  }
+  .final-cta h2 .hl { color: var(--accent); text-shadow: 0 0 28px var(--accent-glow); }
+  .final-cta__buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  @media (max-width: 480px) {
+    .final-cta { padding: 80px 0; }
+    .final-cta__buttons { flex-direction: column; align-items: stretch; width: 100%; padding: 0 24px; }
+  }
+
+  /* ============ FOOTER ============ */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 36px 0 36px;
+    background: var(--bg-deep);
+  }
+  .footer__inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    font-size: 13.5px;
+    color: var(--text-muted);
+  }
+  .footer__inner > :first-child { font-family: var(--font-mono); font-size: 12.5px; }
+  .footer__tag { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-align: center; }
+  .footer__links { display: flex; gap: 22px; justify-content: flex-end; font-size: 13px; }
+  .footer__links a { color: var(--text-secondary); }
+  .footer__links a:hover { color: var(--accent); }
+  .footer__credit {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+  .footer__credit a {
+    color: var(--text-secondary);
+    margin-left: 4px;
+    border-bottom: 1px dashed var(--border-bright);
+    padding-bottom: 1px;
+    transition: color 150ms, border-color 150ms;
+  }
+  .footer__credit a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  @media (max-width: 768px) {
+    .footer__inner { grid-template-columns: 1fr; text-align: center; gap: 14px; }
+    .footer__links { justify-content: center; }
+  }
+
+  /* ============ RELEASE MODAL ============ */
+  .rel-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(5, 5, 10, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+    animation: rel-fade 180ms;
+  }
+  .rel-backdrop.is-open { display: flex; }
+  @keyframes rel-fade { from { opacity: 0; } to { opacity: 1; } }
+  .rel-modal {
+    width: 100%;
+    max-width: 560px;
+    max-height: min(640px, 88vh);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(168, 85, 247, 0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: rel-pop 220ms var(--ease-out);
+  }
+  @keyframes rel-pop {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  .rel-head { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 16px; }
+  .rel-head__title { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+  .rel-head__sub { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin: 0; }
+  .rel-close {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: all 150ms;
+  }
+  .rel-close:hover { color: var(--text-primary); border-color: var(--border-bright); }
+  .rel-close svg { width: 14px; height: 14px; }
+  .rel-body { overflow-y: auto; flex: 1; }
+  .rel-state {
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-family: var(--font-mono);
+  }
+  .rel-state.is-error { color: var(--danger); }
+  .rel-spinner {
+    width: 22px; height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+    margin: 0 auto 12px;
+  }
+  .rel-list { list-style: none; margin: 0; padding: 6px; }
+  .rel-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-primary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 150ms;
+    font-family: inherit;
+  }
+  .rel-item:hover, .rel-item:focus-visible {
+    background: var(--bg-elevated-2);
+    border-color: var(--accent-dim);
+    outline: none;
+  }
+  .rel-item__tag {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent);
+    min-width: 78px;
+  }
+  .rel-item__main { flex: 1; min-width: 0; }
+  .rel-item__name {
+    font-weight: 500;
+    font-size: 14.5px;
+    color: var(--text-primary);
+    margin: 0 0 3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rel-item__meta {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .rel-item__meta .latest { color: var(--success); background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); padding: 0 6px; border-radius: 4px; }
+  .rel-item__meta .prerel { color: var(--warn); background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 0 6px; border-radius: 4px; }
+  .rel-item__arrow { color: var(--text-muted); transition: transform 150ms, color 150ms; flex: 0 0 auto; }
+  .rel-item:hover .rel-item__arrow, .rel-item:focus-visible .rel-item__arrow {
+    color: var(--accent); transform: translateY(2px);
+  }
+  .rel-item__arrow svg { width: 16px; height: 16px; display: block; }
+  .rel-foot {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+  .rel-foot a { color: var(--text-secondary); }
+  .rel-foot a:hover { color: var(--accent); }
+  @media (max-width: 480px) {
+    .rel-backdrop { padding: 0; align-items: flex-end; }
+    .rel-modal { max-height: 92vh; border-radius: 18px 18px 0 0; border-bottom: 0; }
+    .rel-item__tag { min-width: 60px; font-size: 13px; }
+    .rel-item__name { font-size: 13.5px; }
+    .rel-item { padding: 12px; gap: 10px; }
+  }
+
+  /* ============ LIGHTBOX ============ */
+  .lightbox {
+    position: fixed; inset: 0;
+    background: rgba(5, 5, 10, 0.92);
+    backdrop-filter: blur(12px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 110;
+    padding: 40px;
+    cursor: zoom-out;
+    animation: rel-fade 200ms;
+  }
+  .lightbox.is-open { display: flex; }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: var(--radius);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 80px rgba(168,85,247,0.25);
+    cursor: zoom-out;
+    animation: rel-pop 250ms var(--ease-out);
+  }
+
+  /* ============ REDUCE MOTION ============ */
+  @media (prefers-reduced-motion: reduce) {
+    .radar__sweep, .hero__eyebrow .blip, .aurora__blob, .hero__float, .demo-toast,
+    .demo-poll__icon, .dash-row__fill::after, .dash__live .pulse {
+      animation: none;
+    }
+    * { transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Cursor glow follower -->
+<div class="cursor-glow" id="cursor-glow" aria-hidden="true"></div>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="shell nav__inner">
+    <a href="#top" class="brand" aria-label="BatRadar home">
+      <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/icon-nobr.png" alt="" />
+      <span>BatRadar</span>
+      <span class="brand__version">v0.2.3</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <span class="nav__section-links">
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a>
+        <a href="#download" data-i18n="nav.download">Download</a>
+      </span>
+      <a class="stars-badge is-loading" href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener" aria-label="GitHub stars">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span class="star-count" id="star-count">—</span>
+        <span class="star-label">stars</span>
+      </a>
+      <a class="nav__icon-link" href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.63 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.51-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.18-1.18 3.18-1.18.63 1.59.24 2.77.12 3.06.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.41-5.27 5.69.41.36.78 1.07.78 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      </a>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button data-lang="en" class="is-active">EN</button>
+        <button data-lang="vi">VI</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="aurora" aria-hidden="true">
+    <div class="aurora__blob aurora__blob--1"></div>
+    <div class="aurora__blob aurora__blob--2"></div>
+    <div class="aurora__blob aurora__blob--3"></div>
+  </div>
+  <div class="shell hero__inner">
+    <div class="hero__copy">
+      <span class="hero__eyebrow reveal">
+        <span class="blip"></span>
+        <span data-i18n="hero.eyebrow">Live sonar for your quota</span>
+      </span>
+      <h1 data-i18n-html="hero.title" class="reveal reveal--delay-1">
+        Know your AI coding limits <span class="hl">before</span> you hit them.
+      </h1>
+      <p class="hero__sub reveal reveal--delay-2" data-i18n="hero.sub">
+        A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises.
+      </p>
+      <div class="hero__cta reveal reveal--delay-3">
+        <button id="download" type="button" class="btn btn--primary btn--lg btn--magnetic" data-open-releases aria-haspopup="dialog">
+          <span data-i18n="hero.cta">Download for Windows ↓</span>
+        </button>
+      </div>
+      <div class="hero__meta reveal reveal--delay-3">
+        <span>Free</span><span class="sep">·</span>
+        <span>MIT License</span><span class="sep">·</span>
+        <span>Windows 10/11</span><span class="sep">·</span>
+        <span>~80 MB</span>
+      </div>
+      <div class="hero__source reveal reveal--delay-4">
+        <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener" data-i18n="hero.source">View source on GitHub →</a>
+      </div>
+    </div>
+
+    <div class="hero__visual reveal reveal--delay-2">
+      <div class="radar" aria-hidden="true">
+        <div class="radar__rings"></div>
+        <div class="radar__sweep"></div>
+      </div>
+
+      <!-- Live animated dashboard demo -->
+      <div class="dash" aria-hidden="true">
+        <div class="dash__chrome">
+          <div class="dash__dots"><span></span><span></span><span></span></div>
+          <div class="dash__title">BatRadar — Dashboard</div>
+          <div class="dash__live"><span class="pulse"></span> <span data-i18n="dash.live">LIVE</span></div>
+        </div>
+        <div class="dash__body">
+          <div class="dash__section-h">
+            <h4 data-i18n="dash.section">Current Usage</h4>
+            <span class="dash__time" id="dash-time">14:23 · 5h window</span>
+          </div>
+
+          <div class="dash-row">
+            <div class="dash-row__logo">
+              <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/claude.png" alt="" onerror="this.style.display='none';this.parentNode.textContent='C'" />
+            </div>
+            <div>
+              <div class="dash-row__name">Claude Code <span class="meta">opus · sonnet</span></div>
+              <div class="dash-row__bar"><div class="dash-row__fill" id="bar-claude"></div></div>
+            </div>
+            <div class="dash-row__pct" id="pct-claude">0%</div>
+          </div>
+
+          <div class="dash-row">
+            <div class="dash-row__logo">
+              <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/codex.png" alt="" onerror="this.style.display='none';this.parentNode.textContent='X'" />
+            </div>
+            <div>
+              <div class="dash-row__name">Codex <span class="meta">gpt-5 · codex-mini</span></div>
+              <div class="dash-row__bar"><div class="dash-row__fill" id="bar-codex"></div></div>
+            </div>
+            <div class="dash-row__pct" id="pct-codex">0%</div>
+          </div>
+
+          <div class="dash-row">
+            <div class="dash-row__logo">
+              <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/gemini.png" alt="" onerror="this.style.display='none';this.parentNode.textContent='G'" />
+            </div>
+            <div>
+              <div class="dash-row__name">Gemini CLI <span class="meta" data-i18n="dash.soon">coming soon</span></div>
+              <div class="dash-row__bar"><div class="dash-row__fill" id="bar-gemini" style="background: var(--text-muted); opacity: 0.4;"></div></div>
+            </div>
+            <div class="dash-row__pct" id="pct-gemini" style="color: var(--text-muted)">—</div>
+          </div>
+
+          <div class="dash-foot">
+            <div class="dash-foot__cell">
+              <div class="dash-foot__val" id="stat-poll">30s</div>
+              <div class="dash-foot__lbl" data-i18n="dash.s1">poll</div>
+            </div>
+            <div class="dash-foot__cell">
+              <div class="dash-foot__val" id="stat-window">2h 14m</div>
+              <div class="dash-foot__lbl" data-i18n="dash.s2">window left</div>
+            </div>
+            <div class="dash-foot__cell">
+              <div class="dash-foot__val" id="stat-alerts">0</div>
+              <div class="dash-foot__lbl" data-i18n="dash.s3">alerts</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero__float" aria-hidden="true">
+        <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/batradar-float.png" alt="" onerror="this.style.display='none'" />
+        <span class="hero__float-percent" id="float-pct">67%</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS STRIP ============ -->
+<section class="stats" style="padding: 0;">
+  <div class="shell">
+    <div class="stats__grid">
+      <div class="stat reveal">
+        <div class="stat__val"><span data-count-to="30" data-suffix="">0</span><span class="unit">s</span></div>
+        <div class="stat__lbl" data-i18n="stats.1">poll interval</div>
+      </div>
+      <div class="stat reveal reveal--delay-1">
+        <div class="stat__val"><span data-count-to="0" data-suffix="">0</span></div>
+        <div class="stat__lbl" data-i18n="stats.2">telemetry events</div>
+      </div>
+      <div class="stat reveal reveal--delay-2">
+        <div class="stat__val"><span data-count-to="80" data-suffix="">0</span><span class="unit">MB</span></div>
+        <div class="stat__lbl" data-i18n="stats.3">install size</div>
+      </div>
+      <div class="stat reveal reveal--delay-3">
+        <div class="stat__val"><span data-count-to="100" data-suffix="">0</span><span class="unit">%</span></div>
+        <div class="stat__lbl" data-i18n="stats.4">local data</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREENSHOTS ============ -->
+<section id="screenshots">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="sec-head__eyebrow" data-i18n="screenshots.eyebrow">Interface</span>
+      <h2 class="reveal" data-i18n="screenshots.title">How it looks</h2>
+      <p class="reveal reveal--delay-1" data-i18n="screenshots.sub">Four screens. Same purpose: never wonder how much quota you've burned.</p>
+    </div>
+    <div class="shots-grid">
+      <div class="shot-card reveal" data-lightbox="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/floating.png">
+        <div class="shot-card__chrome">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="url">~/desktop · floating-overlay.png</div>
+        </div>
+        <div class="shot-card__frame">
+          <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/floating.png" alt="" onerror="this.style.display='none'" />
+        </div>
+        <div class="shot-card__cap">
+          <span class="shot-card__cap-dot"></span>
+          <span class="shot-card__cap-text" data-i18n="shots.floating">Floating overlay — draggable, color-coded by usage</span>
+        </div>
+      </div>
+      <div class="shot-card reveal reveal--delay-1" data-lightbox="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png">
+        <div class="shot-card__chrome">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="url">batradar://dashboard</div>
+        </div>
+        <div class="shot-card__frame">
+          <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png" alt="" onerror="this.style.display='none'" />
+        </div>
+        <div class="shot-card__cap">
+          <span class="shot-card__cap-dot"></span>
+          <span class="shot-card__cap-text" data-i18n="shots.dashboard">Dashboard — per-provider usage bars</span>
+        </div>
+      </div>
+      <div class="shot-card reveal reveal--delay-2" data-lightbox="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/settings-providers.png">
+        <div class="shot-card__chrome">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="url">batradar://settings/providers</div>
+        </div>
+        <div class="shot-card__frame">
+          <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/settings-providers.png" alt="" onerror="this.style.display='none'" />
+        </div>
+        <div class="shot-card__cap">
+          <span class="shot-card__cap-dot"></span>
+          <span class="shot-card__cap-text" data-i18n="shots.providers">Settings → Providers</span>
+        </div>
+      </div>
+      <div class="shot-card reveal reveal--delay-3" data-lightbox="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/settings-general.png">
+        <div class="shot-card__chrome">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="url">batradar://settings/general</div>
+        </div>
+        <div class="shot-card__frame">
+          <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/settings-general.png" alt="" onerror="this.style.display='none'" />
+        </div>
+        <div class="shot-card__cap">
+          <span class="shot-card__cap-dot"></span>
+          <span class="shot-card__cap-text" data-i18n="shots.general">Settings → General</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES (BENTO) ============ -->
+<section id="features">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="sec-head__eyebrow" data-i18n="features.eyebrow">What you get</span>
+      <h2 class="reveal" data-i18n="features.title">Built for one job</h2>
+      <p class="reveal reveal--delay-1" data-i18n="features.sub">Telling you exactly where your quota stands — right now.</p>
+    </div>
+
+    <div class="bento">
+      <!-- Big card: Floating overlay -->
+      <article class="b-overlay reveal">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+        </div>
+        <h3 data-i18n="feat.1.t">Floating overlay</h3>
+        <p data-i18n="feat.1.b">Draggable circular icon shows your highest current usage %, color-coded green → yellow → red.</p>
+        <div class="demo-overlay" id="demo-overlay-area">
+          <div class="demo-overlay__hint" data-i18n="demo.drag">drag me ↕</div>
+          <div class="demo-overlay__bat" id="demo-bat" style="top: 30%; left: 60%;">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/batradar-float.png" alt="" onerror="this.style.display='none'" />
+            <span class="demo-overlay__pct" id="demo-bat-pct">42%</span>
+          </div>
+          <div class="demo-overlay__taskbar"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </article>
+
+      <!-- Detailed dashboard mini -->
+      <article class="b-dash reveal reveal--delay-1">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="18" x2="5" y2="12"/><line x1="10" y1="18" x2="10" y2="8"/><line x1="15" y1="18" x2="15" y2="14"/><line x1="20" y1="18" x2="20" y2="6"/></svg>
+        </div>
+        <h3 data-i18n="feat.2.t">Detailed dashboard</h3>
+        <p data-i18n="feat.2.b">Per-provider bars: 5-hour session, 7-day weekly, Opus/Sonnet split, extra credit.</p>
+        <div class="demo-bars" id="demo-bars">
+          <div class="demo-bars__row">
+            <span class="demo-bars__lbl">session</span>
+            <div class="demo-bars__track"><div class="demo-bars__fill" data-bar="0" style="background: var(--success); width: 30%"></div></div>
+            <span class="demo-bars__pct" data-pct="0">30%</span>
+          </div>
+          <div class="demo-bars__row">
+            <span class="demo-bars__lbl">weekly</span>
+            <div class="demo-bars__track"><div class="demo-bars__fill" data-bar="1" style="background: var(--warn); width: 65%"></div></div>
+            <span class="demo-bars__pct" data-pct="1">65%</span>
+          </div>
+          <div class="demo-bars__row">
+            <span class="demo-bars__lbl">opus</span>
+            <div class="demo-bars__track"><div class="demo-bars__fill" data-bar="2" style="background: var(--danger); width: 88%"></div></div>
+            <span class="demo-bars__pct" data-pct="2">88%</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Live polling -->
+      <article class="b-polling reveal reveal--delay-2">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>
+        </div>
+        <h3 data-i18n="feat.3.t">Live polling</h3>
+        <p data-i18n="feat.3.b">Auto-refreshes every 30s, rate-limit safe. Always current.</p>
+        <div class="demo-poll">
+          <div class="demo-poll__circle" id="poll-circle" style="--p: 0">
+            <span id="poll-count">30</span>
+          </div>
+          <div class="demo-poll__txt">
+            <b id="poll-status" data-i18n="demo.poll.next">next poll</b>
+            <small data-i18n="demo.poll.sub">claude · codex · /v1/usage</small>
+          </div>
+          <svg class="demo-poll__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+      </article>
+
+      <!-- Smart alerts -->
+      <article class="b-alerts reveal">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+        </div>
+        <h3 data-i18n="feat.4.t">Smart alerts</h3>
+        <p data-i18n="feat.4.b">Notifications at 80% and 95%. Once per window.</p>
+        <div class="demo-toast">
+          <div class="demo-toast__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          </div>
+          <div class="demo-toast__body">
+            <div class="demo-toast__title" data-i18n="demo.toast.title">Claude Code at 82%</div>
+            <small data-i18n="demo.toast.sub">~38 min left in session</small>
+          </div>
+        </div>
+      </article>
+
+      <!-- Zero-config auth (terminal) -->
+      <article class="b-auth reveal reveal--delay-1">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.85 12.15 8.15-8.15"/><path d="m18 5 3 3"/><path d="m15 8 2 2"/></svg>
+        </div>
+        <h3 data-i18n="feat.5.t">Zero-config auth</h3>
+        <p data-i18n="feat.5.b">Reads existing credentials. If you're logged in, BatRadar is.</p>
+        <div class="demo-term">
+          <div><span class="prompt">$</span> <span class="cmd">claude login</span></div>
+          <div class="out">&nbsp;&nbsp;<span class="ok">✓</span> token saved</div>
+          <div><span class="prompt">$</span> <span class="cmd">batradar</span><span class="cur"></span></div>
+        </div>
+      </article>
+
+      <!-- Private by design -->
+      <article class="b-private reveal reveal--delay-2">
+        <div class="bento__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v7c0 5 4 8 8 10 4-2 8-5 8-10V5l-8-3Z"/></svg>
+        </div>
+        <h3 data-i18n="feat.6.t">Private by design</h3>
+        <p data-i18n="feat.6.b">All data stays on your machine. Zero telemetry.</p>
+        <div class="demo-private">
+          <div class="demo-private__row strike"><span class="x">✗</span> <span data-i18n="demo.priv.1">analytics.js</span></div>
+          <div class="demo-private__row strike"><span class="x">✗</span> <span data-i18n="demo.priv.2">crash reports</span></div>
+          <div class="demo-private__row"><span class="ok">✓</span> <span data-i18n="demo.priv.3">local only</span></div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROVIDERS ============ -->
+<section id="providers">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="sec-head__eyebrow" data-i18n="providers.eyebrow">Coverage</span>
+      <h2 class="reveal" data-i18n="providers.title">Supported providers</h2>
+      <p class="reveal reveal--delay-1" data-i18n="providers.sub">More on the way. Vote on what's next in GitHub Issues.</p>
+    </div>
+
+    <div class="providers-grid">
+      <article class="provider-card reveal" data-glow="claude">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/claude.png" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">Claude Code</div>
+        </div>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span data-i18n="providers.auth.claude">OAuth (auto) or manual API key</span>
+        </div>
+      </article>
+
+      <article class="provider-card reveal reveal--delay-1" data-glow="codex">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/codex.png" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">Codex</div>
+        </div>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span data-i18n="providers.auth.codex">OAuth (auto)</span>
+        </div>
+      </article>
+
+      <article class="provider-card reveal reveal--delay-2" data-glow="gemini">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/gemini.png" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">Gemini CLI</div>
+        </div>
+        <span class="status-pill status-pill--soon"><span class="dot"></span> <span data-i18n="providers.status.soon">Soon</span></span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span>—</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ QUICK START ============ -->
+<section id="quickstart">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="sec-head__eyebrow" data-i18n="qs.eyebrow">3 steps</span>
+      <h2 class="reveal" data-i18n="qs.title">Quick start</h2>
+      <p class="reveal reveal--delay-1" data-i18n="qs.sub">From download to running in under a minute.</p>
+    </div>
+
+    <div class="qs-grid">
+      <div class="qs-step reveal">
+        <div class="qs-step__num"><span data-i18n="qs.step">STEP</span> 01</div>
+        <p class="qs-step__body" data-i18n-html="qs.1"><strong>Download</strong> the installer from GitHub Releases.</p>
+      </div>
+      <div class="qs-step reveal reveal--delay-1">
+        <div class="qs-step__num"><span data-i18n="qs.step">STEP</span> 02</div>
+        <p class="qs-step__body" data-i18n-html="qs.2"><strong>Run</strong> <code>BatRadar Setup x.x.x.exe</code>. No config needed.</p>
+      </div>
+      <div class="qs-step reveal reveal--delay-2">
+        <div class="qs-step__num"><span data-i18n="qs.step">STEP</span> 03</div>
+        <p class="qs-step__body" data-i18n-html="qs.3"><strong>Look</strong> at your tray. The bat icon is watching your quota.</p>
+      </div>
+    </div>
+    <p class="qs-note reveal" data-i18n-html="qs.note">Already have <code>claude login</code> / <code>codex</code> set up? You're done.</p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section id="faq">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="sec-head__eyebrow" data-i18n="faq.eyebrow">Doubts</span>
+      <h2 class="reveal" data-i18n="faq.title">FAQ</h2>
+    </div>
+    <div class="faq reveal">
+      <details class="faq-item">
+        <summary data-i18n="faq.1.q">Is it free?</summary>
+        <div class="faq-item__body" data-i18n-html="faq.1.a">Yes — MIT licensed, free forever. The source is on <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">GitHub</a>.</div>
+      </details>
+      <details class="faq-item">
+        <summary data-i18n="faq.2.q">Does it store my API keys?</summary>
+        <div class="faq-item__body" data-i18n-html="faq.2.a">Only the optional manual API key you enter in Settings, stored locally in <code>%APPDATA%/batradar/</code> with base64 encoding. OAuth credentials are read live from Claude Code's and Codex's own files.</div>
+      </details>
+      <details class="faq-item">
+        <summary data-i18n="faq.3.q">Mac / Linux?</summary>
+        <div class="faq-item__body" data-i18n-html="faq.3.a">Not yet. The codebase is Electron so a port is plausible, but the installer is Windows-only right now.</div>
+      </details>
+      <details class="faq-item">
+        <summary data-i18n="faq.4.q">Why is the installer unsigned?</summary>
+        <div class="faq-item__body" data-i18n-html="faq.4.a">Code-signing certs cost money. Windows SmartScreen may warn — click <strong>More info</strong> → <strong>Run anyway</strong>. The source is auditable on GitHub if you'd rather build from scratch.</div>
+      </details>
+      <details class="faq-item">
+        <summary data-i18n="faq.5.q">How often does it poll the API?</summary>
+        <div class="faq-item__body" data-i18n-html="faq.5.a">Default 30 seconds, configurable in Settings. Stays within Anthropic / OpenAI rate limits at any reasonable interval.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final-cta">
+  <div class="shell final-cta__inner">
+    <h2 class="reveal" data-i18n-html="finalcta.title">Stop guessing. <span class="hl">Start seeing.</span></h2>
+    <div class="final-cta__buttons reveal reveal--delay-1">
+      <button type="button" class="btn btn--primary btn--lg btn--magnetic" data-open-releases aria-haspopup="dialog">
+        <span data-i18n="finalcta.cta">Download for Windows ↓</span>
+      </button>
+      <a class="btn btn--ghost btn--lg" href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.63 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.51-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.18-1.18 3.18-1.18.63 1.59.24 2.77.12 3.06.74.81 1.18 1.84 1.18 3.1 0 4.44-2.7 5.41-5.27 5.69.41.36.78 1.07.78 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        <span data-i18n="finalcta.source">View on GitHub</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="shell footer__inner">
+    <div>BatRadar v0.2.3 · MIT License · © 2026</div>
+    <div class="footer__tag" data-i18n="footer.tag">Built for devs who burn through tokens.</div>
+    <div class="footer__links">
+      <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/ZenithHawking/BatRadar/releases/latest" target="_blank" rel="noopener" data-i18n="footer.releases">Releases</a>
+      <a href="https://github.com/ZenithHawking/BatRadar/issues" target="_blank" rel="noopener">Issues</a>
+    </div>
+  </div>
+  <div class="shell footer__credit">
+    <span data-i18n="footer.designed">Designed by</span>
+    <a href="https://vansao.com" target="_blank" rel="noopener">vansao.com</a>
+  </div>
+</footer>
+
+<!-- ============ RELEASE MODAL ============ -->
+<div class="rel-backdrop" id="rel-backdrop" role="dialog" aria-modal="true" aria-labelledby="rel-title" aria-hidden="true">
+  <div class="rel-modal">
+    <div class="rel-head">
+      <div>
+        <h3 class="rel-head__title" id="rel-title" data-i18n="rel.title">Choose a version</h3>
+        <p class="rel-head__sub" data-i18n="rel.sub">github.com/ZenithHawking/BatRadar/releases</p>
+      </div>
+      <button class="rel-close" id="rel-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="rel-body" id="rel-body">
+      <div class="rel-state">
+        <div class="rel-spinner" aria-hidden="true"></div>
+        <div data-i18n="rel.loading">Loading releases…</div>
+      </div>
+    </div>
+    <div class="rel-foot">
+      <a href="https://github.com/ZenithHawking/BatRadar/releases" target="_blank" rel="noopener" data-i18n="rel.all">See all releases on GitHub →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LIGHTBOX ============ -->
+<div class="lightbox" id="lightbox" aria-hidden="true">
+  <img id="lightbox-img" alt="" />
+</div>
+
+<script>
+/* ============ i18n ============ */
+const I18N = {
+  en: {
+    "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
+    "hero.eyebrow": "Live sonar for your quota",
+    "hero.title": 'Know your AI coding limits <span class="hl">before</span> you hit them.',
+    "hero.sub": "A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises.",
+    "hero.cta": "Download for Windows ↓",
+    "hero.source": "View source on GitHub →",
+    "dash.live": "LIVE", "dash.section": "Current Usage", "dash.soon": "coming soon",
+    "dash.s1": "poll", "dash.s2": "window left", "dash.s3": "alerts",
+    "stats.1": "poll interval", "stats.2": "telemetry events", "stats.3": "install size", "stats.4": "local data",
+    "screenshots.eyebrow": "Interface", "screenshots.title": "How it looks",
+    "screenshots.sub": "Four screens. Same purpose: never wonder how much quota you've burned.",
+    "shots.floating": "Floating overlay — draggable, color-coded by usage",
+    "shots.dashboard": "Dashboard — per-provider usage bars",
+    "shots.providers": "Settings → Providers", "shots.general": "Settings → General",
+    "features.eyebrow": "What you get", "features.title": "Built for one job",
+    "features.sub": "Telling you exactly where your quota stands — right now.",
+    "feat.1.t": "Floating overlay", "feat.1.b": "Draggable circular icon shows your highest current usage %, color-coded green → yellow → red.",
+    "feat.2.t": "Detailed dashboard", "feat.2.b": "Per-provider bars: 5-hour session, 7-day weekly, Opus/Sonnet split, extra credit.",
+    "feat.3.t": "Live polling", "feat.3.b": "Auto-refreshes every 30s, rate-limit safe. Always current.",
+    "feat.4.t": "Smart alerts", "feat.4.b": "Notifications at 80% and 95%. Once per window.",
+    "feat.5.t": "Zero-config auth", "feat.5.b": "Reads existing credentials. If you're logged in, BatRadar is.",
+    "feat.6.t": "Private by design", "feat.6.b": "All data stays on your machine. Zero telemetry.",
+    "demo.drag": "drag me ↕",
+    "demo.poll.next": "next poll", "demo.poll.sub": "claude · codex · /v1/usage",
+    "demo.toast.title": "Claude Code at 82%", "demo.toast.sub": "~38 min left in session",
+    "demo.priv.1": "analytics.js", "demo.priv.2": "crash reports", "demo.priv.3": "local only",
+    "providers.eyebrow": "Coverage", "providers.title": "Supported providers",
+    "providers.sub": "More on the way. Vote on what's next in GitHub Issues.",
+    "providers.h3": "Auth",
+    "providers.auth.claude": "OAuth (auto) or manual API key",
+    "providers.auth.codex": "OAuth (auto)",
+    "providers.status.soon": "Soon",
+    "qs.eyebrow": "3 steps", "qs.title": "Quick start", "qs.sub": "From download to running in under a minute.", "qs.step": "STEP",
+    "qs.1": "<strong>Download</strong> the installer from GitHub Releases.",
+    "qs.2": "<strong>Run</strong> <code>BatRadar Setup x.x.x.exe</code>. No config needed.",
+    "qs.3": "<strong>Look</strong> at your tray. The bat icon is watching your quota.",
+    "qs.note": "Already have <code>claude login</code> / <code>codex</code> set up? You're done.",
+    "faq.eyebrow": "Doubts", "faq.title": "FAQ",
+    "faq.1.q": "Is it free?",
+    "faq.1.a": 'Yes — MIT licensed, free forever. The source is on <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">GitHub</a>.',
+    "faq.2.q": "Does it store my API keys?",
+    "faq.2.a": "Only the optional manual API key you enter in Settings, stored locally in <code>%APPDATA%/batradar/</code> with base64 encoding. OAuth credentials are read live from Claude Code's and Codex's own files.",
+    "faq.3.q": "Mac / Linux?",
+    "faq.3.a": "Not yet. The codebase is Electron so a port is plausible, but the installer is Windows-only right now.",
+    "faq.4.q": "Why is the installer unsigned?",
+    "faq.4.a": "Code-signing certs cost money. Windows SmartScreen may warn — click <strong>More info</strong> → <strong>Run anyway</strong>. The source is auditable on GitHub if you'd rather build from scratch.",
+    "faq.5.q": "How often does it poll the API?",
+    "faq.5.a": "Default 30 seconds, configurable in Settings. Stays within Anthropic / OpenAI rate limits at any reasonable interval.",
+    "finalcta.title": 'Stop guessing. <span class="hl">Start seeing.</span>',
+    "finalcta.cta": "Download for Windows ↓",
+    "finalcta.source": "View on GitHub",
+    "footer.tag": "Built for devs who burn through tokens.",
+    "footer.releases": "Releases",
+    "footer.designed": "Designed by",
+    "rel.title": "Choose a version", "rel.sub": "github.com/ZenithHawking/BatRadar/releases",
+    "rel.loading": "Loading releases…", "rel.error": "Couldn't load releases from GitHub.",
+    "rel.empty": "No releases published yet.", "rel.retry": "Retry",
+    "rel.fallback": "Open releases page on GitHub", "rel.all": "See all releases on GitHub →",
+    "rel.latest": "latest", "rel.prerelease": "pre-release", "rel.no-exe": "No .exe asset attached"
+  },
+  vi: {
+    "nav.features": "Tính năng", "nav.screenshots": "Ảnh chụp", "nav.download": "Tải về",
+    "hero.eyebrow": "Sonar real-time cho quota của bạn",
+    "hero.title": 'Biết quota AI sắp hết — <span class="hl">trước khi</span> nó hết.',
+    "hero.sub": "App Windows siêu nhẹ hiện usage Claude Code & Codex real-time. Không cần mở browser. Không bị bất ngờ.",
+    "hero.cta": "Tải cho Windows ↓",
+    "hero.source": "Xem source trên GitHub →",
+    "dash.live": "LIVE", "dash.section": "Usage hiện tại", "dash.soon": "sắp có",
+    "dash.s1": "poll", "dash.s2": "còn lại", "dash.s3": "cảnh báo",
+    "stats.1": "khoảng poll", "stats.2": "telemetry", "stats.3": "kích thước", "stats.4": "dữ liệu local",
+    "screenshots.eyebrow": "Giao diện", "screenshots.title": "Trông như thế nào",
+    "screenshots.sub": "Bốn màn hình. Cùng một mục tiêu: không bao giờ đoán mò quota đã dùng bao nhiêu.",
+    "shots.floating": "Floating overlay — kéo thả tự do, đổi màu theo usage",
+    "shots.dashboard": "Dashboard — usage chi tiết từng provider",
+    "shots.providers": "Settings → Providers", "shots.general": "Settings → General",
+    "features.eyebrow": "Bạn nhận được", "features.title": "Sinh ra để làm 1 việc",
+    "features.sub": "Cho bạn biết quota của bạn đang ở đâu — ngay lúc này.",
+    "feat.1.t": "Floating overlay", "feat.1.b": "Icon tròn kéo thả tự do, hiện usage % cao nhất, đổi màu xanh → vàng → đỏ.",
+    "feat.2.t": "Dashboard chi tiết", "feat.2.b": "Bars theo provider: session 5h, weekly 7 ngày, Opus/Sonnet, extra credit.",
+    "feat.3.t": "Cập nhật liên tục", "feat.3.b": "Tự refresh mỗi 30s, an toàn rate-limit. Luôn mới.",
+    "feat.4.t": "Cảnh báo thông minh", "feat.4.b": "Notification ở 80% và 95%. 1 lần mỗi window.",
+    "feat.5.t": "Không cần đăng nhập", "feat.5.b": "Đọc credentials có sẵn. Bạn đã login = BatRadar đã login.",
+    "feat.6.t": "Riêng tư", "feat.6.b": "Mọi dữ liệu ở máy bạn. Zero telemetry.",
+    "demo.drag": "kéo đi ↕",
+    "demo.poll.next": "lần poll kế", "demo.poll.sub": "claude · codex · /v1/usage",
+    "demo.toast.title": "Claude Code đã 82%", "demo.toast.sub": "còn ~38 phút trong session",
+    "demo.priv.1": "analytics.js", "demo.priv.2": "crash reports", "demo.priv.3": "chỉ local",
+    "providers.eyebrow": "Hỗ trợ", "providers.title": "Provider hỗ trợ",
+    "providers.sub": "Còn nhiều hơn đang trên đường. Vote ở GitHub Issues.",
+    "providers.h3": "Xác thực",
+    "providers.auth.claude": "OAuth (auto) hoặc API key thủ công",
+    "providers.auth.codex": "OAuth (auto)",
+    "providers.status.soon": "Sắp có",
+    "qs.eyebrow": "3 bước", "qs.title": "Bắt đầu nhanh", "qs.sub": "Từ lúc tải đến lúc chạy chưa tới 1 phút.", "qs.step": "BƯỚC",
+    "qs.1": "<strong>Tải</strong> installer từ GitHub Releases.",
+    "qs.2": "<strong>Chạy</strong> <code>BatRadar Setup x.x.x.exe</code>. Không cần cấu hình.",
+    "qs.3": "<strong>Nhìn</strong> xuống system tray. Icon dơi đang canh quota cho bạn.",
+    "qs.note": "Đã có <code>claude login</code> / <code>codex</code> rồi? Xong luôn.",
+    "faq.eyebrow": "Thắc mắc", "faq.title": "Câu hỏi thường gặp",
+    "faq.1.q": "Miễn phí không?",
+    "faq.1.a": 'Có — MIT license, miễn phí vĩnh viễn. Source nằm trên <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">GitHub</a>.',
+    "faq.2.q": "Có lưu API key của tôi không?",
+    "faq.2.a": "Chỉ lưu API key thủ công nếu bạn nhập trong Settings — lưu local ở <code>%APPDATA%/batradar/</code>, encode base64. OAuth credentials thì đọc live từ file của Claude Code / Codex, không copy.",
+    "faq.3.q": "Có bản Mac / Linux không?",
+    "faq.3.a": "Chưa có. Codebase Electron nên port được, nhưng hiện tại chỉ có installer cho Windows.",
+    "faq.4.q": "Sao installer chưa ký?",
+    "faq.4.a": "Cert code signing tốn tiền. Windows SmartScreen có thể cảnh báo — bấm <strong>More info</strong> → <strong>Run anyway</strong>. Source mở trên GitHub, build từ source nếu muốn.",
+    "faq.5.q": "Bao lâu poll API 1 lần?",
+    "faq.5.a": "Mặc định 30 giây, chỉnh được trong Settings. An toàn rate limit của Anthropic / OpenAI ở mọi mức hợp lý.",
+    "finalcta.title": 'Đừng đoán nữa. <span class="hl">Hãy nhìn.</span>',
+    "finalcta.cta": "Tải cho Windows ↓",
+    "finalcta.source": "Xem trên GitHub",
+    "footer.tag": "Dành cho dev đốt token như đốt giấy.",
+    "footer.releases": "Releases",
+    "footer.designed": "Thiết kế bởi",
+    "rel.title": "Chọn phiên bản", "rel.sub": "github.com/ZenithHawking/BatRadar/releases",
+    "rel.loading": "Đang tải danh sách…", "rel.error": "Không tải được danh sách release từ GitHub.",
+    "rel.empty": "Chưa có phiên bản nào được phát hành.", "rel.retry": "Thử lại",
+    "rel.fallback": "Mở trang releases trên GitHub", "rel.all": "Xem tất cả release trên GitHub →",
+    "rel.latest": "mới nhất", "rel.prerelease": "pre-release", "rel.no-exe": "Không có file .exe"
+  }
+};
+
+function applyLang(lang) {
+  const dict = I18N[lang] || I18N.en;
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const k = el.getAttribute("data-i18n");
+    if (dict[k] != null) el.textContent = dict[k];
+  });
+  document.querySelectorAll("[data-i18n-html]").forEach(el => {
+    const k = el.getAttribute("data-i18n-html");
+    if (dict[k] != null) el.innerHTML = dict[k];
+  });
+  document.querySelectorAll(".lang-toggle button").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.lang === lang);
+    btn.setAttribute("aria-pressed", btn.dataset.lang === lang ? "true" : "false");
+  });
+  try { localStorage.setItem("batradar.lang", lang); } catch (e) {}
+  if (window.__releasesCache && document.getElementById("rel-backdrop").classList.contains("is-open")) {
+    renderReleases(window.__releasesCache);
+  }
+}
+(function initLang(){
+  let saved = null;
+  try { saved = localStorage.getItem("batradar.lang"); } catch (e) {}
+  const fallback = (navigator.language || "en").toLowerCase().startsWith("vi") ? "vi" : "en";
+  applyLang(saved || fallback);
+})();
+document.querySelectorAll(".lang-toggle button").forEach(btn => {
+  btn.addEventListener("click", () => applyLang(btn.dataset.lang));
+});
+
+/* ============ Nav stuck state ============ */
+const nav = document.getElementById("nav");
+const setStuck = () => nav.classList.toggle("is-stuck", window.scrollY > 12);
+setStuck(); window.addEventListener("scroll", setStuck, { passive: true });
+
+/* ============ Cursor glow follower ============ */
+const glow = document.getElementById("cursor-glow");
+if (glow && window.matchMedia("(hover: hover)").matches) {
+  let tx = 0, ty = 0, gx = 0, gy = 0, rafId = null;
+  function tick() {
+    gx += (tx - gx) * 0.12;
+    gy += (ty - gy) * 0.12;
+    glow.style.transform = `translate(-50%, -50%) translate3d(${gx}px, ${gy}px, 0)`;
+    if (Math.abs(tx - gx) > 0.5 || Math.abs(ty - gy) > 0.5) {
+      rafId = requestAnimationFrame(tick);
+    } else { rafId = null; }
+  }
+  window.addEventListener("mousemove", e => {
+    tx = e.clientX; ty = e.clientY;
+    if (!rafId) rafId = requestAnimationFrame(tick);
+  });
+  document.addEventListener("mouseleave", () => glow.classList.add("is-hidden"));
+  document.addEventListener("mouseenter", () => glow.classList.remove("is-hidden"));
+}
+
+/* ============ Scroll reveal ============ */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add("is-visible");
+      io.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+
+/* ============ Count-up stats ============ */
+function countUp(el, target, duration = 1400, suffix = "") {
+  const start = performance.now();
+  function frame(t) {
+    const p = Math.min(1, (t - start) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const val = Math.round(target * eased);
+    el.textContent = val + suffix;
+    if (p < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+const countIO = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const target = parseInt(e.target.dataset.countTo, 10);
+      const suffix = e.target.dataset.suffix || "";
+      countUp(e.target, target, 1500, suffix);
+      countIO.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.4 });
+document.querySelectorAll("[data-count-to]").forEach(el => countIO.observe(el));
+
+/* ============ Magnetic buttons ============ */
+document.querySelectorAll(".btn--magnetic").forEach(btn => {
+  btn.addEventListener("mousemove", (e) => {
+    const r = btn.getBoundingClientRect();
+    const mx = ((e.clientX - r.left) / r.width) * 100;
+    const my = ((e.clientY - r.top) / r.height) * 100;
+    btn.style.setProperty("--mx", mx + "%");
+    btn.style.setProperty("--my", my + "%");
+    const dx = (e.clientX - r.left - r.width / 2) * 0.12;
+    const dy = (e.clientY - r.top - r.height / 2) * 0.18;
+    btn.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.transform = "";
+  });
+});
+
+/* ============ Live dashboard demo ============ */
+(function dashDemo(){
+  // Scenes: [claudePct, codexPct, geminiPct, alerts, windowLeftMinutes]
+  const scenes = [
+    [12, 24,  0, 0, 280],
+    [38, 51,  0, 0, 240],
+    [62, 73,  0, 1, 180],
+    [81, 88,  0, 2, 120],
+    [55, 42,  0, 2,  90],  // session reset
+    [18, 28,  0, 0, 290],
+  ];
+  let idx = 0;
+  const barC = document.getElementById("bar-claude"),
+        barX = document.getElementById("bar-codex"),
+        pctC = document.getElementById("pct-claude"),
+        pctX = document.getElementById("pct-codex"),
+        alertsEl = document.getElementById("stat-alerts"),
+        winEl = document.getElementById("stat-window"),
+        floatPct = document.getElementById("float-pct");
+
+  function colorFor(p) {
+    if (p < 60) return "var(--success)";
+    if (p < 85) return "var(--warn)";
+    return "var(--danger)";
+  }
+  function setBar(bar, pctEl, p) {
+    bar.style.width = p + "%";
+    bar.style.background = colorFor(p);
+    bar.style.color = colorFor(p);
+    pctEl.textContent = p + "%";
+    pctEl.style.color = p >= 85 ? "var(--danger)" : (p >= 60 ? "var(--warn)" : "var(--text-primary)");
+  }
+  function fmtMin(m) {
+    const h = Math.floor(m / 60), mm = m % 60;
+    return h + "h " + String(mm).padStart(2, "0") + "m";
+  }
+  function tick() {
+    const s = scenes[idx];
+    setBar(barC, pctC, s[0]);
+    setBar(barX, pctX, s[1]);
+    alertsEl.textContent = s[3];
+    alertsEl.style.color = s[3] > 0 ? "var(--warn)" : "var(--text-primary)";
+    winEl.textContent = fmtMin(s[4]);
+    if (floatPct) {
+      const hi = Math.max(s[0], s[1]);
+      floatPct.textContent = hi + "%";
+      floatPct.style.color = colorFor(hi);
+      floatPct.style.borderColor = "rgba(255,255,255,0.15)";
+    }
+    idx = (idx + 1) % scenes.length;
+  }
+  setTimeout(tick, 400);
+  setInterval(tick, 3400);
+
+  // clock
+  const timeEl = document.getElementById("dash-time");
+  function clock() {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mm = String(d.getMinutes()).padStart(2,"0");
+    if (timeEl) timeEl.textContent = hh + ":" + mm + " · 5h window";
+  }
+  clock(); setInterval(clock, 30000);
+})();
+
+/* ============ Mini dashboard bars (bento) cycle ============ */
+(function miniDashDemo(){
+  const scenes = [
+    [{p:30,c:"success"},{p:62,c:"warn"},{p:88,c:"danger"}],
+    [{p:48,c:"success"},{p:74,c:"warn"},{p:42,c:"success"}],
+    [{p:18,c:"success"},{p:55,c:"success"},{p:95,c:"danger"}],
+  ];
+  const fills = document.querySelectorAll("[data-bar]");
+  const pcts = document.querySelectorAll("[data-pct]");
+  const colorMap = {
+    success: "var(--success)", warn: "var(--warn)", danger: "var(--danger)"
+  };
+  let i = 0;
+  function step() {
+    const s = scenes[i];
+    fills.forEach((f, k) => {
+      f.style.width = s[k].p + "%";
+      f.style.background = colorMap[s[k].c];
+    });
+    pcts.forEach((p, k) => p.textContent = s[k].p + "%");
+    i = (i + 1) % scenes.length;
+  }
+  setTimeout(step, 600);
+  setInterval(step, 2800);
+})();
+
+/* ============ Polling demo countdown ============ */
+(function pollDemo(){
+  const circle = document.getElementById("poll-circle");
+  const count = document.getElementById("poll-count");
+  const status = document.getElementById("poll-status");
+  let t = 30;
+  function tick() {
+    t--;
+    if (t <= 0) {
+      status.textContent = "polling…";
+      circle.style.setProperty("--p", 100);
+      count.textContent = "↻";
+      setTimeout(() => {
+        t = 30;
+        status.textContent = I18N[document.documentElement.lang]?.["demo.poll.next"] || "next poll";
+      }, 800);
+    } else {
+      const pct = ((30 - t) / 30) * 100;
+      circle.style.setProperty("--p", pct);
+      count.textContent = t;
+    }
+  }
+  setInterval(tick, 1000);
+})();
+
+/* ============ Floating bat draggable demo ============ */
+(function dragBat(){
+  const area = document.getElementById("demo-overlay-area");
+  const bat = document.getElementById("demo-bat");
+  const pctEl = document.getElementById("demo-bat-pct");
+  if (!area || !bat) return;
+
+  let dragging = false, ox = 0, oy = 0;
+
+  function setColor(p) {
+    if (p < 60) return ["var(--success)", "var(--success)"];
+    if (p < 85) return ["var(--warn)", "var(--warn)"];
+    return ["var(--danger)", "var(--danger)"];
+  }
+
+  function start(e) {
+    dragging = true;
+    const r = bat.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    ox = point.clientX - r.left;
+    oy = point.clientY - r.top;
+    e.preventDefault();
+  }
+  function move(e) {
+    if (!dragging) return;
+    const point = e.touches ? e.touches[0] : e;
+    const a = area.getBoundingClientRect();
+    let x = point.clientX - a.left - ox;
+    let y = point.clientY - a.top - oy;
+    x = Math.max(0, Math.min(a.width - 60, x));
+    y = Math.max(0, Math.min(a.height - 60 - 28, y));
+    bat.style.left = x + "px";
+    bat.style.top = y + "px";
+
+    // Pct changes with horizontal position for fun
+    const p = Math.round((x / (a.width - 60)) * 95 + 5);
+    const [bg, col] = setColor(p);
+    bat.style.borderColor = bg;
+    bat.style.boxShadow = `0 12px 30px ${bg.replace("var(--","").replace(")","")}`;
+    bat.style.boxShadow = `0 12px 30px rgba(168,85,247,0.25)`;
+    pctEl.style.color = col;
+    pctEl.textContent = p + "%";
+  }
+  function end() { dragging = false; }
+
+  bat.addEventListener("mousedown", start);
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+  bat.addEventListener("touchstart", start, { passive: false });
+  window.addEventListener("touchmove", move, { passive: false });
+  window.addEventListener("touchend", end);
+})();
+
+/* ============ GitHub stars badge ============ */
+(function fetchStars(){
+  const el = document.getElementById("star-count");
+  const badge = el?.closest(".stars-badge");
+  if (!el) return;
+  fetch("https://api.github.com/repos/ZenithHawking/BatRadar")
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => {
+      const n = d.stargazers_count ?? 0;
+      el.textContent = n >= 1000 ? (n/1000).toFixed(1) + "k" : n;
+      badge?.classList.remove("is-loading");
+    })
+    .catch(() => {
+      // Hide quietly if rate-limited
+      badge?.classList.add("is-loading");
+    });
+})();
+
+/* ============ Lightbox ============ */
+(function lightbox(){
+  const lb = document.getElementById("lightbox");
+  const img = document.getElementById("lightbox-img");
+  document.querySelectorAll("[data-lightbox]").forEach(card => {
+    card.addEventListener("click", () => {
+      img.src = card.getAttribute("data-lightbox");
+      lb.classList.add("is-open");
+      lb.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+  });
+  function close() {
+    lb.classList.remove("is-open");
+    lb.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    img.src = "";
+  }
+  lb.addEventListener("click", close);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && lb.classList.contains("is-open")) close();
+  });
+})();
+
+/* ============ FAQ single-open ============ */
+document.querySelectorAll(".faq-item").forEach(item => {
+  item.addEventListener("toggle", () => {
+    if (item.open) {
+      document.querySelectorAll(".faq-item").forEach(o => { if (o !== item) o.open = false; });
+    }
+  });
+});
+
+/* ============ Release modal ============ */
+const REPO = "ZenithHawking/BatRadar";
+const backdrop = document.getElementById("rel-backdrop");
+const relBody = document.getElementById("rel-body");
+const closeBtn = document.getElementById("rel-close");
+let lastTrigger = null;
+window.__releasesCache = null;
+
+function currentDict() { return I18N[document.documentElement.lang] || I18N.en; }
+function tt(k) { return currentDict()[k] || I18N.en[k] || k; }
+function escapeHtml(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function fmtBytes(n){if(!Number.isFinite(n)||n<=0)return"";if(n<1024)return n+" B";if(n<1048576)return(n/1024).toFixed(1)+" KB";if(n<1073741824)return(n/1048576).toFixed(1)+" MB";return(n/1073741824).toFixed(2)+" GB";}
+function fmtDate(iso){if(!iso)return"";try{const d=new Date(iso);const lang=document.documentElement.lang==="vi"?"vi-VN":"en-US";return d.toLocaleDateString(lang,{year:"numeric",month:"short",day:"numeric"});}catch(e){return iso.slice(0,10);}}
+function pickWinAsset(assets){if(!Array.isArray(assets))return null;const score=a=>{const n=(a.name||"").toLowerCase();if(n.endsWith(".exe"))return 3;if(n.endsWith(".msi"))return 2;if(n.endsWith(".zip")&&/win|x64|setup/.test(n))return 1;return 0;};return assets.map(a=>({a,s:score(a)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s)[0]?.a||null;}
+
+function renderLoading() {
+  relBody.innerHTML = `<div class="rel-state"><div class="rel-spinner" aria-hidden="true"></div><div>${tt("rel.loading")}</div></div>`;
+}
+function renderError(msg) {
+  relBody.innerHTML = `<div class="rel-state is-error"><div style="margin-bottom:14px">${msg || tt("rel.error")}</div><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn--ghost" id="rel-retry" type="button">${tt("rel.retry")}</button><a class="btn btn--primary" href="https://github.com/${REPO}/releases" target="_blank" rel="noopener">${tt("rel.fallback")}</a></div></div>`;
+  document.getElementById("rel-retry")?.addEventListener("click", () => { window.__releasesCache = null; loadReleases(); });
+}
+function renderEmpty() {
+  relBody.innerHTML = `<div class="rel-state"><div style="margin-bottom:14px">${tt("rel.empty")}</div><a class="btn btn--primary" href="https://github.com/${REPO}/releases" target="_blank" rel="noopener">${tt("rel.fallback")}</a></div>`;
+}
+function renderReleases(releases) {
+  const stable = releases.filter(r => !r.draft && !r.prerelease);
+  const latestId = stable[0]?.id;
+  const items = releases.filter(r => !r.draft).map(r => {
+    const asset = pickWinAsset(r.assets);
+    const isLatest = r.id === latestId;
+    const tags = [];
+    tags.push(`<span>${fmtDate(r.published_at || r.created_at)}</span>`);
+    if (isLatest) tags.push(`<span class="latest">${tt("rel.latest")}</span>`);
+    if (r.prerelease) tags.push(`<span class="prerel">${tt("rel.prerelease")}</span>`);
+    if (asset) tags.push(`<span>${fmtBytes(asset.size)}</span>`);
+    else tags.push(`<span style="color:var(--danger)">${tt("rel.no-exe")}</span>`);
+    const name = asset ? asset.name : (r.name || r.tag_name);
+    const href = asset ? asset.browser_download_url : r.html_url;
+    const dl = asset ? "download" : "";
+    const target = asset ? "" : `target="_blank" rel="noopener"`;
+    return `<li><a class="rel-item" href="${href}" ${dl} ${target}><span class="rel-item__tag">${escapeHtml(r.tag_name || "—")}</span><span class="rel-item__main"><div class="rel-item__name">${escapeHtml(name)}</div><div class="rel-item__meta">${tags.join("")}</div></span><span class="rel-item__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/></svg></span></a></li>`;
+  }).join("");
+  relBody.innerHTML = `<ul class="rel-list">${items}</ul>`;
+  relBody.querySelectorAll(".rel-item[download]").forEach(a => {
+    a.addEventListener("click", () => setTimeout(closeModal, 350));
+  });
+}
+
+async function loadReleases() {
+  if (window.__releasesCache) { renderReleases(window.__releasesCache); return; }
+  renderLoading();
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, { headers: { "Accept": "application/vnd.github+json" }});
+    if (!res.ok) {
+      const detail = res.status === 403 ? " (rate limit)" : ` (HTTP ${res.status})`;
+      renderError(tt("rel.error") + detail);
+      return;
+    }
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) { renderEmpty(); return; }
+    window.__releasesCache = data;
+    renderReleases(data);
+  } catch (err) { renderError(tt("rel.error")); }
+}
+function openModal(trigger) {
+  lastTrigger = trigger || null;
+  backdrop.classList.add("is-open");
+  backdrop.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  loadReleases();
+  setTimeout(() => closeBtn.focus(), 0);
+}
+function closeModal() {
+  backdrop.classList.remove("is-open");
+  backdrop.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
+}
+document.querySelectorAll("[data-open-releases]").forEach(btn => btn.addEventListener("click", () => openModal(btn)));
+closeBtn.addEventListener("click", closeModal);
+backdrop.addEventListener("click", e => { if (e.target === backdrop) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && backdrop.classList.contains("is-open")) closeModal(); });
+</script>
+</body>
+</html>
