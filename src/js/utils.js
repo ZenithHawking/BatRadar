@@ -1,6 +1,14 @@
-// Electron IPC bridge — same API surface as old Tauri version
-export const invoke = (cmd, args) => window.electronAPI.invoke(cmd, args || {});
-export const listen = (event, cb)  => window.electronAPI.on(event, cb);
+// Runtime bridge — the renderer runs under both Electron and Tauri during the
+// migration. Both deliver events as { payload } so callers need no branching.
+const TAURI = typeof window !== 'undefined' ? window.__TAURI__ : null;
+
+export const invoke = TAURI
+    ? (cmd, args) => TAURI.core.invoke(cmd, args || {})
+    : (cmd, args) => window.electronAPI.invoke(cmd, args || {});
+
+export const listen = TAURI
+    ? (event, cb) => TAURI.event.listen(event, cb)
+    : (event, cb) => window.electronAPI.on(event, cb);
 
 export function formatDuration(seconds) {
     if (seconds <= 0) return 'now';
@@ -33,4 +41,4 @@ export function usageColor(u) {
 
 export function pct(u) { return `${Math.round(u * 100)}%`; }
 
-export const PROVIDER_COLORS = { claude: '#D97706', codex: '#10B981', gemini: '#3B82F6' };
+export const PROVIDER_COLORS = { claude: '#D97706', codex: '#10B981', gemini: '#3B82F6', copilot: '#8B5CF6', openrouter: '#14B8A6', antigravity: '#EC4899' };

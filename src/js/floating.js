@@ -40,7 +40,11 @@ document.addEventListener('mouseup', e => {
     if (!dragging) return;
     dragging = false;
     icon.style.cursor = 'grab';
-    if (!didDrag && e.button === 0) {
+    if (didDrag) {
+        // Persist only when the drag ends — set_floating_pos fires on every
+        // mousemove and must stay off the disk
+        invoke('save_position', { x: e.screenX - offsetX, y: e.screenY - offsetY });
+    } else if (e.button === 0) {
         invoke('show_dashboard');
     }
 });
@@ -65,7 +69,7 @@ listen('provider-status-changed', ({ payload }) => {
 });
 
 // ─── Initial load ─────────────────────────────────────────────────────────────
-['claude', 'codex'].forEach(p => {
+['claude', 'codex', 'gemini', 'copilot', 'openrouter', 'antigravity'].forEach(p => {
     invoke('get_usage', { provider: p }).then(data => {
         providerUsage[p] = data;
         updateFloatingDisplay();
@@ -77,6 +81,9 @@ const ICON_MAP = {
     claude: 'assets/icons/claude.png',
     codex: 'assets/icons/codex.png',
     gemini: 'assets/icons/gemini.png',
+    copilot: 'assets/icons/copilot.svg',
+    openrouter: 'assets/icons/openrouter.ico',
+    antigravity: 'assets/icons/antigravity.png',
 };
 
 function getProviderUsage(prov) {

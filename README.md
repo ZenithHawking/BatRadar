@@ -48,7 +48,7 @@ Run the installer — no configuration needed. BatRadar will appear in your syst
 - **Live polling** — auto-refreshes in the background with a configurable interval (default 30s), rate-limit safe
 - **Alerts** — desktop notifications at warning (80%) and critical (95%) thresholds before you hit the wall
 - **System tray** — runs quietly in the background, right-click to access dashboard or settings
-- **Multi-provider** — Claude Code (OAuth or API key) + Codex (OAuth), Gemini CLI coming soon
+- **Multi-provider** — Claude Code, Codex, Gemini CLI, GitHub Copilot, Antigravity (auto-detect) + OpenRouter (API key)
 - **Autostart** — optional Windows login startup
 
 ---
@@ -60,9 +60,30 @@ Run the installer — no configuration needed. BatRadar will appear in your syst
 | **Claude Code** | OAuth (auto) | Run `claude login` in terminal |
 | **Claude Code** | API Key | Enter key in Settings → Manual API Key |
 | **Codex** | OAuth (auto) | Run `npm i -g @openai/codex` then `codex` |
-| **Gemini CLI** | — | Coming soon |
+| **Gemini CLI** | OAuth (auto) | Run `npm i -g @google/gemini-cli` then `gemini` |
+| **Copilot** | GitHub token (auto) | Login Copilot in VS Code/JetBrains, or `gh auth login` |
+| **OpenRouter** | API Key | Create a free key at openrouter.ai/keys, enter in Settings |
+| **Antigravity** | Local app (auto) | Install from antigravity.google, login, keep the app open |
 
-BatRadar reads credentials directly from the files Claude Code and Codex create on your machine — no re-login required if you're already signed in.
+BatRadar reads credentials directly from the files these tools create on your machine — no re-login required if you're already signed in.
+
+---
+
+## Building from source
+
+Two runtimes live in this repo while the Tauri migration is in progress. The
+renderer under `src/` is shared — `src/js/utils.js` detects which runtime it is
+running under, so the same HTML/CSS/JS serves both.
+
+| | Electron (`main.js`) | Tauri (`src-tauri/`) |
+|---|---|---|
+| Build | `npm run build` | `npx @tauri-apps/cli@2 build` |
+| Installer size | ~84 MB | ~4.5 MB |
+| Requires | Node | Node + Rust toolchain + MSVC build tools |
+
+The Tauri build has no auto-updater wired up yet; everything else — all six
+providers, tray, alerts, floating overlay, autostart, single-instance — is at
+parity with the Electron build.
 
 ---
 

@@ -9,9 +9,43 @@ let cfg = null;
     const providers = await invoke('get_providers');
     renderProviders(providers);
     updateApiKeyStatus();
+    updateOpenrouterKeyStatus();
     loadDisplayToggles();
     loadAppVersion();
 })();
+
+async function updateOpenrouterKeyStatus() {
+    const el = document.getElementById('orkey-status');
+    if (!el) return;
+    try {
+        const has = await invoke('get_openrouter_key_status');
+        el.innerHTML = has
+            ? `${icon('key', 12)} <span style="color:var(--color-green)">OpenRouter API key is set</span>`
+            : `${icon('alert', 12)} <span style="color:var(--color-yellow)">No OpenRouter key — create one free at openrouter.ai/keys</span>`;
+    } catch {}
+}
+
+window.saveOpenrouterKey = async () => {
+    const input = document.getElementById('input-orkey');
+    const key = input.value.trim();
+    if (!key) { alert('Please enter an API key'); return; }
+    if (!key.startsWith('sk-or-')) { alert('Invalid format. Should start with sk-or-'); return; }
+    try {
+        await invoke('save_openrouter_key', { key });
+        input.value = '';
+        await updateOpenrouterKeyStatus();
+        renderProviders(await invoke('get_providers'));
+    } catch (e) { alert('Failed: ' + e); }
+};
+
+window.removeOpenrouterKey = async () => {
+    if (!confirm('Remove saved OpenRouter API key?')) return;
+    try {
+        await invoke('remove_openrouter_key');
+        await updateOpenrouterKeyStatus();
+        renderProviders(await invoke('get_providers'));
+    } catch (e) { alert('Failed: ' + e); }
+};
 
 async function loadAppVersion() {
     try {
@@ -46,9 +80,12 @@ function renderProviders(providers) {
     const el = document.getElementById('providers-list');
     el.innerHTML = '';
     const ICONS = {
-        claude: '<img src="assets/icons/claude.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
-        codex:  '<img src="assets/icons/codex.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
-        gemini: '<img src="assets/icons/gemini.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        claude:     '<img src="assets/icons/claude.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        codex:      '<img src="assets/icons/codex.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        gemini:     '<img src="assets/icons/gemini.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        copilot:    '<img src="assets/icons/copilot.svg" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        openrouter: '<img src="assets/icons/openrouter.ico" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
+        antigravity:'<img src="assets/icons/antigravity.png" width="20" height="20" style="border-radius:4px;vertical-align:middle">',
     };
     const labels = {
         connected: 'Connected',
@@ -60,7 +97,10 @@ function renderProviders(providers) {
     const setupHints = {
         claude: 'Run: <code>claude login</code> or enter API key',
         codex: 'Run: <code>npm i -g @openai/codex</code> then <code>codex</code>',
-        gemini: 'Coming soon',
+        gemini: 'Run: <code>npm i -g @google/gemini-cli</code> then <code>gemini</code>',
+        copilot: 'Login Copilot in your editor or run <code>gh auth login</code>',
+        openrouter: 'Enter API key below (OpenRouter API Key)',
+        antigravity: 'Open the Antigravity app and login with Google',
     };
     for (const p of providers) {
         const authLabel = p.auth === 'api-key' ? '· via API Key'
@@ -160,7 +200,8 @@ window.saveSettings = async () => {
 };
 
 window.disconnectProvider = async (provider) => {
-    if (!confirm(`Disconnect ${provider}?\n\nApp sẽ ngừng theo dõi provider này. Credentials gốc (${provider === 'claude' ? 'claude login' : 'codex login'}) không bị xóa — bạn có thể bật lại bất cứ lúc nào.`)) return;
+    const loginCmd = { claude: 'claude login', codex: 'codex login', gemini: 'gemini', copilot: 'editor login / gh', openrouter: 'API key', antigravity: 'Antigravity app' }[provider] || provider;
+    if (!confirm(`Disconnect ${provider}?\n\nApp sẽ ngừng theo dõi provider này. Credentials gốc (${loginCmd}) không bị xóa — bạn có thể bật lại bất cứ lúc nào.`)) return;
     await invoke('disconnect_provider', { provider });
     await updateApiKeyStatus();
     const providers = await invoke('get_providers');
@@ -177,29 +218,24 @@ window.reconnectProvider = async (provider) => {
 window.closeSettings = () => invoke('hide_settings');
 
 // ─── Display toggle (which providers show on floating icon) ───────────────
+const DISPLAY_PROVIDERS = ['claude', 'codex', 'gemini', 'copilot', 'openrouter', 'antigravity'];
+
 async function loadDisplayToggles() {
     const providers = await invoke('get_display_providers');
     // null = all enabled
-    document.getElementById('display-claude').checked = !providers || providers.includes('claude');
-    document.getElementById('display-codex').checked  = !providers || providers.includes('codex');
+    for (const id of DISPLAY_PROVIDERS) {
+        const el = document.getElementById(`display-${id}`);
+        if (el) el.checked = !providers || providers.includes(id);
+    }
 }
 
 window.updateDisplayProviders = async () => {
-    const claude = document.getElementById('display-claude').checked;
-    const codex  = document.getElementById('display-codex').checked;
-
-    let providers = null; // null = show all
-    if (claude && codex) {
-        providers = null;
-    } else if (claude) {
-        providers = ['claude'];
-    } else if (codex) {
-        providers = ['codex'];
-    } else {
+    let selected = DISPLAY_PROVIDERS.filter(id => document.getElementById(`display-${id}`)?.checked);
+    if (selected.length === 0) {
         // At least one must be selected
-        providers = ['claude'];
+        selected = ['claude'];
         document.getElementById('display-claude').checked = true;
     }
-
+    const providers = selected.length === DISPLAY_PROVIDERS.length ? null : selected;
     await invoke('set_display_providers', { providers });
 };
