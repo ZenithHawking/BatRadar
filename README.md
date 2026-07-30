@@ -1,6 +1,6 @@
 # BatRadar 🦇
 
-> Monitor your AI coding tool usage limits — Claude Code, Codex — from a floating desktop overlay.
+> Monitor your AI coding tool usage limits — Claude Code, Codex, Gemini CLI, Copilot, OpenRouter, Antigravity — from a floating desktop overlay.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron)
@@ -15,7 +15,7 @@
 
 ## What is BatRadar?
 
-BatRadar is a lightweight Windows desktop app that sits in your system tray and shows a small floating icon on screen. It automatically reads your Claude Code and Codex credentials and polls their usage APIs so you always know how much of your quota you've burned — without switching windows or opening a browser.
+BatRadar is a lightweight Windows desktop app that sits in your system tray and shows a small floating icon on screen. It automatically reads your existing credentials for Claude Code, Codex, Gemini CLI, Copilot, OpenRouter and Antigravity, and polls their usage APIs so you always know how much of your quota you've burned — without switching windows or opening a browser.
 
 When usage gets high, it sends a Windows notification before you hit the limit.
 
@@ -43,8 +43,9 @@ Run the installer — no configuration needed. BatRadar will appear in your syst
 
 ## Features
 
-- **Floating overlay** — a draggable circular icon that shows your highest current usage % and changes color as it rises
-- **Dashboard** — click the icon to open a panel with per-provider usage bars (5h session, 7-day weekly, Opus/Sonnet breakdowns, extra credit spend)
+- **Floating overlay** — a draggable circular icon that shows your highest current usage % and pulses a radar-style glow that speeds up and reddens as you approach the limit
+- **Dashboard** — click the icon to open a panel with per-provider usage bars (5h session, 7-day weekly, Opus/Sonnet breakdowns, extra credit spend); cards are collapsible and can be reordered by drag-and-drop
+- **Usage history** *(Tauri build)* — a sparkline chart per provider built from a lightweight local log, so you can see burn-rate over the last 30 days
 - **Live polling** — auto-refreshes in the background with a configurable interval (default 30s), rate-limit safe
 - **Alerts** — desktop notifications at warning (80%) and critical (95%) thresholds before you hit the wall
 - **System tray** — runs quietly in the background, right-click to access dashboard or settings
@@ -81,9 +82,12 @@ running under, so the same HTML/CSS/JS serves both.
 | Installer size | ~84 MB | ~4.5 MB |
 | Requires | Node | Node + Rust toolchain + MSVC build tools |
 
-The Tauri build has no auto-updater wired up yet; everything else — all six
-providers, tray, alerts, floating overlay, autostart, single-instance — is at
-parity with the Electron build.
+The Tauri build has an auto-updater wired up (`tauri-plugin-updater`, signed
+releases) but it isn't in the GitHub Actions release pipeline yet — published
+releases are still the Electron build. Everything else — all six providers,
+tray, alerts, floating overlay, autostart, single-instance — is at parity
+with the Electron build, plus a usage-history sparkline that Electron doesn't
+have (no equivalent IPC command wired there).
 
 ---
 
@@ -151,6 +155,7 @@ BatRadar/
 │   │   └── utils.js     # Shared helpers
 │   ├── css/             # Per-window stylesheets
 │   └── assets/icons/    # Provider icons, tray icon, app icon
+├── src-tauri/            # Tauri backend (windows, tray, polling, IPC, history log) — in progress
 └── screenshots/         # App screenshots for README
 ```
 
@@ -178,8 +183,8 @@ BatRadar/
 
 ```bash
 # Bump version in package.json, then:
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 GitHub Actions will build the installer and publish a release automatically.

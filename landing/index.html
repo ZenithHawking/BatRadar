@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>BatRadar — Monitor your Claude Code &amp; Codex usage</title>
-<meta name="description" content="Lightweight Windows overlay that shows your Claude Code and Codex usage in real time. Free, MIT licensed, no telemetry." />
+<title>BatRadar — Monitor your Claude, Codex, Gemini &amp; more usage</title>
+<meta name="description" content="Lightweight Windows overlay that shows your Claude, Codex, Gemini, Copilot, OpenRouter and Antigravity usage in real time. Free, MIT licensed, no telemetry." />
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="BatRadar — Know your AI coding limits before you hit them" />
-<meta property="og:description" content="A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises." />
+<meta property="og:description" content="A lightweight Windows overlay that shows usage across 6 AI coding tools live. No browser tabs. No surprises." />
 <meta property="og:image" content="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png" />
 <meta property="og:url" content="https://zenithhawking.github.io/BatRadar/" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="BatRadar — Monitor your Claude Code &amp; Codex usage" />
+<meta name="twitter:title" content="BatRadar — Monitor your Claude, Codex, Gemini &amp; more usage" />
 <meta name="twitter:description" content="A lightweight Windows overlay. Free, MIT licensed, no telemetry." />
 <meta name="twitter:image" content="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/screenshots/dashboard.png" />
 
@@ -1247,6 +1247,9 @@
   .provider-card[data-glow="claude"] { --card-glow: rgba(212, 132, 90, 0.25); }
   .provider-card[data-glow="codex"] { --card-glow: rgba(255, 255, 255, 0.12); }
   .provider-card[data-glow="gemini"] { --card-glow: rgba(101, 121, 245, 0.25); }
+  .provider-card[data-glow="copilot"] { --card-glow: rgba(139, 92, 246, 0.25); }
+  .provider-card[data-glow="openrouter"] { --card-glow: rgba(20, 184, 166, 0.25); }
+  .provider-card[data-glow="antigravity"] { --card-glow: rgba(236, 72, 153, 0.25); }
 
   .provider-card__head {
     display: flex;
@@ -1663,7 +1666,7 @@
     <a href="#top" class="brand" aria-label="BatRadar home">
       <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/icon-nobr.png" alt="" />
       <span>BatRadar</span>
-      <span class="brand__version">v0.2.3</span>
+      <span class="brand__version">v0.3.0</span>
     </a>
     <nav class="nav__links" aria-label="Primary">
       <span class="nav__section-links">
@@ -1706,7 +1709,7 @@
         Know your AI coding limits <span class="hl">before</span> you hit them.
       </h1>
       <p class="hero__sub reveal reveal--delay-2" data-i18n="hero.sub">
-        A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises.
+        A lightweight Windows overlay that shows your Claude, Codex, Gemini, Copilot, OpenRouter and Antigravity usage live. No browser tabs. No surprises.
       </p>
       <div class="hero__cta reveal reveal--delay-3">
         <button id="download" type="button" class="btn btn--primary btn--lg btn--magnetic" data-open-releases aria-haspopup="dialog">
@@ -2056,10 +2059,52 @@
           </div>
           <div class="provider-card__name">Gemini CLI</div>
         </div>
-        <span class="status-pill status-pill--soon"><span class="dot"></span> <span data-i18n="providers.status.soon">Soon</span></span>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
         <div class="provider-card__auth">
           <small data-i18n="providers.h3">Auth</small>
-          <span>—</span>
+          <span data-i18n="providers.auth.gemini">OAuth (auto)</span>
+        </div>
+      </article>
+
+      <article class="provider-card reveal" data-glow="copilot">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/copilot.svg" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">Copilot</div>
+        </div>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span data-i18n="providers.auth.copilot">Editor login or gh CLI</span>
+        </div>
+      </article>
+
+      <article class="provider-card reveal reveal--delay-1" data-glow="openrouter">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/openrouter.ico" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">OpenRouter</div>
+        </div>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span data-i18n="providers.auth.openrouter">API key</span>
+        </div>
+      </article>
+
+      <article class="provider-card reveal reveal--delay-2" data-glow="antigravity">
+        <div class="provider-card__head">
+          <div class="provider-card__logo">
+            <img src="https://raw.githubusercontent.com/ZenithHawking/BatRadar/main/src/assets/icons/antigravity.png" alt="" onerror="this.style.display='none'" />
+          </div>
+          <div class="provider-card__name">Antigravity</div>
+        </div>
+        <span class="status-pill status-pill--live"><span class="dot"></span> Live</span>
+        <div class="provider-card__auth">
+          <small data-i18n="providers.h3">Auth</small>
+          <span data-i18n="providers.auth.antigravity">Google login in-app</span>
         </div>
       </article>
     </div>
@@ -2144,7 +2189,7 @@
 <!-- ============ FOOTER ============ -->
 <footer class="footer">
   <div class="shell footer__inner">
-    <div>BatRadar v0.2.3 · MIT License · © 2026</div>
+    <div>BatRadar v0.3.0 · MIT License · © 2026</div>
     <div class="footer__tag" data-i18n="footer.tag">Built for devs who burn through tokens.</div>
     <div class="footer__links">
       <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener">GitHub</a>
@@ -2194,7 +2239,7 @@ const I18N = {
     "nav.features": "Features", "nav.screenshots": "Screenshots", "nav.download": "Download",
     "hero.eyebrow": "Live sonar for your quota",
     "hero.title": 'Know your AI coding limits <span class="hl">before</span> you hit them.',
-    "hero.sub": "A lightweight Windows overlay that shows your Claude Code and Codex usage live. No browser tabs. No surprises.",
+    "hero.sub": "A lightweight Windows overlay that shows your Claude, Codex, Gemini, Copilot, OpenRouter and Antigravity usage live. No browser tabs. No surprises.",
     "hero.cta": "Download for Windows ↓",
     "hero.source": "View source on GitHub →",
     "dash.live": "LIVE", "dash.section": "Current Usage", "dash.soon": "coming soon",
@@ -2222,6 +2267,10 @@ const I18N = {
     "providers.h3": "Auth",
     "providers.auth.claude": "OAuth (auto) or manual API key",
     "providers.auth.codex": "OAuth (auto)",
+    "providers.auth.gemini": "OAuth (auto)",
+    "providers.auth.copilot": "Editor login or gh CLI",
+    "providers.auth.openrouter": "API key",
+    "providers.auth.antigravity": "Google login in-app",
     "providers.status.soon": "Soon",
     "qs.eyebrow": "3 steps", "qs.title": "Quick start", "qs.sub": "From download to running in under a minute.", "qs.step": "STEP",
     "qs.1": "<strong>Download</strong> the installer from GitHub Releases.",
@@ -2255,7 +2304,7 @@ const I18N = {
     "nav.features": "Tính năng", "nav.screenshots": "Ảnh chụp", "nav.download": "Tải về",
     "hero.eyebrow": "Sonar real-time cho quota của bạn",
     "hero.title": 'Biết quota AI sắp hết — <span class="hl">trước khi</span> nó hết.',
-    "hero.sub": "App Windows siêu nhẹ hiện usage Claude Code & Codex real-time. Không cần mở browser. Không bị bất ngờ.",
+    "hero.sub": "App Windows siêu nhẹ hiện usage Claude, Codex, Gemini, Copilot, OpenRouter và Antigravity real-time. Không cần mở browser. Không bị bất ngờ.",
     "hero.cta": "Tải cho Windows ↓",
     "hero.source": "Xem source trên GitHub →",
     "dash.live": "LIVE", "dash.section": "Usage hiện tại", "dash.soon": "sắp có",
@@ -2283,6 +2332,10 @@ const I18N = {
     "providers.h3": "Xác thực",
     "providers.auth.claude": "OAuth (auto) hoặc API key thủ công",
     "providers.auth.codex": "OAuth (auto)",
+    "providers.auth.gemini": "OAuth (auto)",
+    "providers.auth.copilot": "Đăng nhập editor hoặc gh CLI",
+    "providers.auth.openrouter": "API key",
+    "providers.auth.antigravity": "Đăng nhập Google trong app",
     "providers.status.soon": "Sắp có",
     "qs.eyebrow": "3 bước", "qs.title": "Bắt đầu nhanh", "qs.sub": "Từ lúc tải đến lúc chạy chưa tới 1 phút.", "qs.step": "BƯỚC",
     "qs.1": "<strong>Tải</strong> installer từ GitHub Releases.",
