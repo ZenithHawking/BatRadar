@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core APIs the BatRadar windows need (event listening, window control).",
+  "windows": ["dashboard", "floating", "settings"],
+  "permissions": ["core:default", "updater:default"]
+}

@@ -51,7 +51,16 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 12px 14px;
+  cursor: grab;
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.provider-card:active {
+  cursor: grabbing;
+}
+
+.provider-card.dragging {
+  opacity: 0.4;
 }
 
 .provider-card.active {
@@ -64,6 +73,38 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-summary {
+  font-size: 12px;
+  font-weight: 700;
+  display: none;
+}
+
+.chevron {
+  display: flex;
+  color: var(--text-dim);
+  transition: transform 0.15s;
+}
+
+.provider-card:not(.expanded) .usage-summary {
+  display: inline-flex;
+}
+
+.provider-card:not(.expanded) .usage-section {
+  display: none;
+}
+
+.provider-card.expanded .chevron {
+  transform: rotate(180deg);
 }
 
 .provider-name-row {
@@ -99,6 +140,15 @@ body {
   border: 1px solid var(--border);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.history-chart {
+  width: 100%;
+  height: 56px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: block;
 }
 
 /* Usage rows */

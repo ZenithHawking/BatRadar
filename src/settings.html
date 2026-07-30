@@ -41,8 +41,28 @@
             <img src="assets/icons/codex.png" width="18" height="18" style="border-radius:3px">
             <span style="font-size:12px">Codex</span>
           </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="display-gemini" checked onchange="updateDisplayProviders()">
+            <img src="assets/icons/gemini.png" width="18" height="18" style="border-radius:3px">
+            <span style="font-size:12px">Gemini CLI</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="display-copilot" checked onchange="updateDisplayProviders()">
+            <img src="assets/icons/copilot.svg" width="18" height="18" style="border-radius:3px">
+            <span style="font-size:12px">Copilot</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="display-openrouter" checked onchange="updateDisplayProviders()">
+            <img src="assets/icons/openrouter.ico" width="18" height="18" style="border-radius:3px">
+            <span style="font-size:12px">OpenRouter</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="display-antigravity" checked onchange="updateDisplayProviders()">
+            <img src="assets/icons/antigravity.png" width="18" height="18" style="border-radius:3px">
+            <span style="font-size:12px">Antigravity</span>
+          </label>
         </div>
-        <div class="setting-desc" style="margin-top:6px">When both enabled, icon rotates between them every 10s.</div>
+        <div class="setting-desc" style="margin-top:6px">When multiple enabled, icon rotates between them every 10s.</div>
       </div>
     </div>
 
@@ -90,7 +110,43 @@
             <strong>Gemini (Google)</strong>
           </div>
           <div class="help-steps">
-            Coming soon. Visit <span class="help-link" onclick="openExternal('https://aistudio.google.com/apikey')">aistudio.google.com</span> to get a key.
+            <b>OAuth only (auto-detect):</b><br>
+            1. Install: <code>npm install -g @google/gemini-cli</code><br>
+            2. Run: <code>gemini</code> and login with Google<br>
+            3. BatRadar detects automatically. No key needed!<br><br>
+            <b>Lưu ý:</b> Từ 6/2026 Google chỉ cho phép tài khoản Gemini Code Assist Standard/Enterprise đăng nhập Google trên Gemini CLI. Tài khoản cá nhân dùng <span class="help-link" onclick="openExternal('https://antigravity.google/')">Antigravity</span> thay thế.
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/copilot.svg" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>Copilot (GitHub)</strong>
+          </div>
+          <div class="help-steps">
+            <b>Auto-detect (no key needed):</b><br>
+            Login GitHub Copilot in VS Code / JetBrains, or run <code>gh auth login</code>.<br>
+            Copilot Free (2000 completions + 50 premium requests/tháng) cũng track được — bật tại <span class="help-link" onclick="openExternal('https://github.com/settings/copilot')">github.com/settings/copilot</span>.
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/openrouter.ico" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>OpenRouter</strong>
+          </div>
+          <div class="help-steps">
+            Tạo API key miễn phí tại <span class="help-link" onclick="openExternal('https://openrouter.ai/keys')">openrouter.ai/keys</span> rồi nhập vào ô OpenRouter API Key bên dưới.
+          </div>
+        </div>
+        <div class="help-item">
+          <div class="help-provider">
+            <img src="assets/icons/antigravity.png" width="16" height="16" style="border-radius:3px;vertical-align:middle">
+            <strong>Antigravity (Google)</strong>
+          </div>
+          <div class="help-steps">
+            <b>Auto-detect (app phải đang mở):</b><br>
+            1. Tải tại <span class="help-link" onclick="openExternal('https://antigravity.google/')">antigravity.google</span> và login Google<br>
+            2. Mở app Antigravity — BatRadar đọc quota từ app đang chạy.<br>
+            Hiển thị 2 pool: Gemini và Claude+GPT, mỗi pool có limit 5h + tuần.
           </div>
         </div>
       </div>
@@ -108,6 +164,22 @@
         <div class="setting-desc" style="margin-top:6px;color:var(--color-yellow);font-size:10px">
           <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
           Key stored locally only. Never sent to any server except the provider's API.
+        </div>
+      </div>
+
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-top:8px;">
+        <div style="font-size:11px;margin-bottom:4px;color:var(--text-dim);display:flex;align-items:center;gap:6px">
+          <img src="assets/icons/openrouter.ico" width="14" height="14" style="border-radius:3px">
+          <span>OpenRouter API Key</span>
+        </div>
+        <div id="orkey-status" style="font-size:11px;margin-bottom:6px;color:var(--text-dim)"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="password" id="input-orkey" placeholder="sk-or-v1-..."
+            style="flex:1;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;font-size:12px;font-family:monospace;outline:none">
+          <button class="btn-primary" onclick="saveOpenrouterKey()" style="padding:6px 12px">Save</button>
+          <button class="btn-danger" onclick="removeOpenrouterKey()" style="padding:6px 10px" title="Remove OpenRouter key">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+          </button>
         </div>
       </div>
     </div>

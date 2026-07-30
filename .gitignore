@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/
+
 # Claude Code local settings
 .claude/
 
@@ -19,3 +23,4 @@ npm-debug.log*
 .env
 .env.local
 *.enc
+.tauri-updater-key.pem
