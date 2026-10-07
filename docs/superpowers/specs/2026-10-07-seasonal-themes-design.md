@@ -14,7 +14,7 @@ Phát hành kèm: Tauri 0.4.0 thay cho Electron 0.3.0, người dùng Electron �
 sang tự động.
 
 ### Thành công khi
-- Người dùng Electron 0.3.0 bấm cập nhật → máy chạy Tauri 0.4.0, bản Electron bị gỡ,
+- Người dùng Electron 0.3.0 (và 0.2.x) bấm cập nhật → máy chạy Tauri 0.4.0, bản Electron bị gỡ,
   settings/lịch sử/key OpenRouter còn nguyên, chỉ một mục tự khởi động.
 - Từ 07/10 đến hết 31/10 dashboard + icon nổi hiện theme Halloween; 01/11 tự về giao diện
   thường mà không cần mở lại app.
@@ -153,6 +153,20 @@ Thêm vào `Config` (Rust, `src-tauri/src/config.rs`), có `serde(default)`:
 Settings thêm một dòng sau "Notifications": **"Giao diện theo mùa"** — "Đổi giao diện theo dịp
 lễ (Halloween, Noel, Tết…)" — toggle `toggle-seasonal`.
 
+## 5b. Cập nhật app (Tauri updater)
+
+Bản Electron tự kiểm tra cập nhật và hỏi người dùng; bản Tauri hiện chỉ có nút "Kiểm tra" cài
+ngay không hỏi, không báo khi đã mới nhất. 0.4.0 phải bằng hoặc hơn Electron:
+
+- Rust tự kiểm tra 30 giây sau khi mở app và mỗi 6 giờ (`updater.check()`), **không** tự cài.
+- Có bản mới → thông báo Windows "BatRadar <ver> đã có" + phát sự kiện `update-available
+  {version, notes}`; dashboard hiện dải trên cùng "Có bản <ver> — Cập nhật".
+- Bấm "Cập nhật" (dashboard hoặc Settings) → command `install_update` tải + cài, phát
+  `update-progress {percent}`; dải/nút hiện "Đang tải 45%…"; xong thì khởi động lại.
+- Nút "Kiểm tra" trong Settings luôn có kết quả: "Đã là bản mới nhất (0.4.0)", "Có bản
+  <ver>" (kèm nút Cập nhật), hoặc "Lỗi: <lý do>".
+- Đang tải thì không cho bấm lần hai.
+
 ## 6. Sửa lỗi đi kèm
 
 1. **Icon chìm sau cửa sổ khác** (`main.rs`, vòng 2 giây): khi icon không bị ẩn chủ động,
@@ -169,7 +183,7 @@ lễ (Halloween, Noel, Tết…)" — toggle `toggle-seasonal`.
 
 1. **Khoá ký mới**: `cargo tauri signer generate`; pubkey vào `tauri.conf.json`; khoá bí mật
    cất ngoài repo (chủ repo giữ). Build đặt `TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)`.
-2. **Version** 0.4.0 trong `Cargo.toml`, `tauri.conf.json`, `package.json`.
+2. **Version** 0.4.0 trong `Cargo.toml`, `tauri.conf.json`, `package.json`. Bỏ `"createUpdaterArtifacts": true` cũ nếu cần đổi sang `"v2Compatible"`/mặc định theo Tauri CLI 2.11.
 3. **NSIS hook** (`src-tauri/windows/hooks.nsh`, khai báo ở `bundle.windows.nsis.installerHooks`):
    - `NSIS_HOOK_PREINSTALL`: nếu có
      `%LOCALAPPDATA%\Programs\bat-radar\Uninstall BatRadar.exe` → chạy với
@@ -180,6 +194,18 @@ lễ (Halloween, Noel, Tết…)" — toggle `toggle-seasonal`.
    (updater Tauri), `latest.yml` (updater Electron, `version: 0.4.0`, trỏ tới cùng file
    `.exe`, `sha512` base64 + `size` của file đó).
 5. **Đẩy `themes/` lên `main`** trước khi phát hành để app mới có lịch ngay.
+6. **Gỡ Electron khỏi repo** (sau khi test chuyển đổi ở §8 đạt):
+   - Xoá `main.js`, `preload.js`, `RELEASE_NOTES_v0.2.2.md`, `RELEASE_NOTES_v0.2.3.md`.
+   - `package.json`: bỏ `electron`, `electron-builder`, `electron-updater`, khối `build`,
+     `"main"`; scripts còn `dev` (`cargo tauri dev`), `build` (`cargo tauri build`),
+     `test` (`node --test src/js/season/`). Tạo lại `package-lock.json`.
+   - `src/js/utils.js`: bỏ nhánh `window.electronAPI`, chỉ còn Tauri.
+   - Bỏ lệnh no-op `set_float_interactive` (chỉ để tương thích Electron) ở Rust và renderer.
+   - `README.md`: bỏ badge Electron, bảng so sánh Electron/Tauri, cây thư mục cũ; hướng dẫn
+     build bằng Tauri; ghi chú người dùng cũ được chuyển tự động.
+   - Landing page: sửa chỗ nhắc Electron/dung lượng nếu có.
+   - Release cũ trên GitHub **giữ nguyên** (lịch sử tải về). Code Electron vẫn còn trong
+     git history nếu cần dựng bản "cầu nối" ở §9.
 
 ## 8. Kiểm thử
 
