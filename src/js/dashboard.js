@@ -16,12 +16,16 @@ const ICONS = {
 // ─── Live updates (all providers) ─────────────────────────────────────────────
 listen('usage-update', ({ payload }) => {
     const card = document.getElementById(`card-${payload.provider}`);
-    if (card) { renderUsage(card, payload.provider, payload.data); updateStatus('Updated just now'); }
+    if (!card) return;
+    if (!card.querySelector(`#rows-${payload.provider}`)) { rebuildCard(payload.provider); return; }
+    renderUsage(card, payload.provider, payload.data);
+    updateStatus('Updated just now');
 });
 
 listen('provider-status-changed', ({ payload }) => {
     const card = document.getElementById(`card-${payload.provider}`);
     if (!card) return;
+    if (payload.status === 'connected' && !card.querySelector(`#rows-${payload.provider}`)) { rebuildCard(payload.provider); return; }
     const badge = card.querySelector('.status-badge');
     if (badge) { badge.className = `status-badge ${payload.status}`; badge.textContent = statusLabel(payload.status); }
     if (payload.status === 'disabled') {
@@ -421,6 +425,22 @@ function buildCard(p) {
     });
     makeDraggable(card);
     return card;
+}
+
+// A card built while its provider was disconnected has no rows to fill; when
+// the provider connects later (Antigravity is discovered on the first poll,
+// or the user re-enables one) swap in a freshly built card in place.
+async function rebuildCard(id) {
+    const old = document.getElementById(`card-${id}`);
+    if (!old) return;
+    const p = (await invoke('get_providers')).find(x => x.id === id);
+    if (!p) return;
+    const card = buildCard(p);
+    if (old.classList.contains('expanded')) card.classList.add('expanded');
+    old.replaceWith(card);
+    if (p.status === 'connected') {
+        try { renderUsage(card, id, await invoke('get_usage', { provider: id })); } catch { /* next poll fills it */ }
+    }
 }
 
 function renderUsage(card, id, data) {
