@@ -54,8 +54,8 @@ impl Default for Config {
     }
 }
 
-/// Same directory the Electron build used, so an upgrade keeps the user's
-/// settings and their saved OpenRouter key.
+/// Same directory the old Electron build (≤ 0.3) used, so upgrading users keep
+/// their settings and their saved OpenRouter key.
 pub fn config_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))

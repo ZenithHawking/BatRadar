@@ -24,8 +24,8 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 
 const FLOAT_SIZE: f64 = 62.0;
-/// Mirrors the Electron build's `floatingIntentionallyHidden` — the recovery
-/// loop below skips re-showing the icon when the user hid it on purpose.
+/// Set when the user hides the icon on purpose, so the recovery loop below
+/// does not bring it back.
 static FLOATING_HIDDEN: AtomicBool = AtomicBool::new(false);
 /// Minimum gap between calls to the same provider, on top of any 429 backoff
 const MIN_POLL_GAP: Duration = Duration::from_secs(30);
@@ -804,10 +804,6 @@ fn move_floating(app: AppHandle, dx: f64, dy: f64) {
     }
 }
 
-/// Kept for renderer compatibility with the Electron build
-#[tauri::command]
-fn set_float_interactive() {}
-
 #[tauri::command]
 fn show_floating(app: AppHandle) {
     FLOATING_HIDDEN.store(false, Ordering::Relaxed);
@@ -904,7 +900,6 @@ fn main() {
             get_floating_position,
             set_floating_pos,
             move_floating,
-            set_float_interactive,
             show_floating,
             hide_floating,
             get_display_providers,
@@ -963,7 +958,7 @@ fn main() {
                 cleanup_electron_leftovers();
             });
 
-            // Show the dashboard shortly after startup, like the Electron build
+            // Show the dashboard shortly after startup
             let h = handle.clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(400)).await;

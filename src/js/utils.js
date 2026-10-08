@@ -1,14 +1,7 @@
-// Runtime bridge — the renderer runs under both Electron and Tauri during the
-// migration. Both deliver events as { payload } so callers need no branching.
-const TAURI = typeof window !== 'undefined' ? window.__TAURI__ : null;
+const TAURI = window.__TAURI__;
 
-export const invoke = TAURI
-    ? (cmd, args) => TAURI.core.invoke(cmd, args || {})
-    : (cmd, args) => window.electronAPI.invoke(cmd, args || {});
-
-export const listen = TAURI
-    ? (event, cb) => TAURI.event.listen(event, cb)
-    : (event, cb) => window.electronAPI.on(event, cb);
+export const invoke = (cmd, args) => TAURI.core.invoke(cmd, args || {});
+export const listen = (event, cb) => TAURI.event.listen(event, cb);
 
 export function formatDuration(seconds) {
     if (seconds <= 0) return 'now';

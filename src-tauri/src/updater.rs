@@ -1,5 +1,5 @@
 //! Checks GitHub for a signed update in the background and installs only when
-//! the user clicks. Mirrors the Electron build's "ask first" behaviour.
+//! the user clicks.
 use serde::Serialize;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};

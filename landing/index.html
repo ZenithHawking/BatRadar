@@ -1720,7 +1720,7 @@
         <span>Free</span><span class="sep">·</span>
         <span>MIT License</span><span class="sep">·</span>
         <span>Windows 10/11</span><span class="sep">·</span>
-        <span>~80 MB</span>
+        <span>~5 MB</span>
       </div>
       <div class="hero__source reveal reveal--delay-4">
         <a href="https://github.com/ZenithHawking/BatRadar" target="_blank" rel="noopener" data-i18n="hero.source">View source on GitHub →</a>
@@ -1817,7 +1817,7 @@
         <div class="stat__lbl" data-i18n="stats.2">telemetry events</div>
       </div>
       <div class="stat reveal reveal--delay-2">
-        <div class="stat__val"><span data-count-to="80" data-suffix="">0</span><span class="unit">MB</span></div>
+        <div class="stat__val"><span data-count-to="5" data-suffix="">0</span><span class="unit">MB</span></div>
         <div class="stat__lbl" data-i18n="stats.3">install size</div>
       </div>
       <div class="stat reveal reveal--delay-3">
@@ -2127,7 +2127,7 @@
       </div>
       <div class="qs-step reveal reveal--delay-1">
         <div class="qs-step__num"><span data-i18n="qs.step">STEP</span> 02</div>
-        <p class="qs-step__body" data-i18n-html="qs.2"><strong>Run</strong> <code>BatRadar Setup x.x.x.exe</code>. No config needed.</p>
+        <p class="qs-step__body" data-i18n-html="qs.2"><strong>Run</strong> <code>BatRadar_x.x.x_x64-setup.exe</code>. No config needed.</p>
       </div>
       <div class="qs-step reveal reveal--delay-2">
         <div class="qs-step__num"><span data-i18n="qs.step">STEP</span> 03</div>
@@ -2156,7 +2156,7 @@
       </details>
       <details class="faq-item">
         <summary data-i18n="faq.3.q">Mac / Linux?</summary>
-        <div class="faq-item__body" data-i18n-html="faq.3.a">Not yet. The codebase is Electron so a port is plausible, but the installer is Windows-only right now.</div>
+        <div class="faq-item__body" data-i18n-html="faq.3.a">Not yet. The app is built with Tauri, so a port is plausible, but the installer is Windows-only right now.</div>
       </details>
       <details class="faq-item">
         <summary data-i18n="faq.4.q">Why is the installer unsigned?</summary>
@@ -2274,7 +2274,7 @@ const I18N = {
     "providers.status.soon": "Soon",
     "qs.eyebrow": "3 steps", "qs.title": "Quick start", "qs.sub": "From download to running in under a minute.", "qs.step": "STEP",
     "qs.1": "<strong>Download</strong> the installer from GitHub Releases.",
-    "qs.2": "<strong>Run</strong> <code>BatRadar Setup x.x.x.exe</code>. No config needed.",
+    "qs.2": "<strong>Run</strong> <code>BatRadar_x.x.x_x64-setup.exe</code>. No config needed.",
     "qs.3": "<strong>Look</strong> at your tray. The bat icon is watching your quota.",
     "qs.note": "Already have <code>claude login</code> / <code>codex</code> set up? You're done.",
     "faq.eyebrow": "Doubts", "faq.title": "FAQ",
@@ -2283,7 +2283,7 @@ const I18N = {
     "faq.2.q": "Does it store my API keys?",
     "faq.2.a": "Only the optional manual API key you enter in Settings, stored locally in <code>%APPDATA%/batradar/</code> with base64 encoding. OAuth credentials are read live from Claude Code's and Codex's own files.",
     "faq.3.q": "Mac / Linux?",
-    "faq.3.a": "Not yet. The codebase is Electron so a port is plausible, but the installer is Windows-only right now.",
+    "faq.3.a": "Not yet. The app is built with Tauri, so a port is plausible, but the installer is Windows-only right now.",
     "faq.4.q": "Why is the installer unsigned?",
     "faq.4.a": "Code-signing certs cost money. Windows SmartScreen may warn — click <strong>More info</strong> → <strong>Run anyway</strong>. The source is auditable on GitHub if you'd rather build from scratch.",
     "faq.5.q": "How often does it poll the API?",
@@ -2339,7 +2339,7 @@ const I18N = {
     "providers.status.soon": "Sắp có",
     "qs.eyebrow": "3 bước", "qs.title": "Bắt đầu nhanh", "qs.sub": "Từ lúc tải đến lúc chạy chưa tới 1 phút.", "qs.step": "BƯỚC",
     "qs.1": "<strong>Tải</strong> installer từ GitHub Releases.",
-    "qs.2": "<strong>Chạy</strong> <code>BatRadar Setup x.x.x.exe</code>. Không cần cấu hình.",
+    "qs.2": "<strong>Chạy</strong> <code>BatRadar_x.x.x_x64-setup.exe</code>. Không cần cấu hình.",
     "qs.3": "<strong>Nhìn</strong> xuống system tray. Icon dơi đang canh quota cho bạn.",
     "qs.note": "Đã có <code>claude login</code> / <code>codex</code> rồi? Xong luôn.",
     "faq.eyebrow": "Thắc mắc", "faq.title": "Câu hỏi thường gặp",
@@ -2348,7 +2348,7 @@ const I18N = {
     "faq.2.q": "Có lưu API key của tôi không?",
     "faq.2.a": "Chỉ lưu API key thủ công nếu bạn nhập trong Settings — lưu local ở <code>%APPDATA%/batradar/</code>, encode base64. OAuth credentials thì đọc live từ file của Claude Code / Codex, không copy.",
     "faq.3.q": "Có bản Mac / Linux không?",
-    "faq.3.a": "Chưa có. Codebase Electron nên port được, nhưng hiện tại chỉ có installer cho Windows.",
+    "faq.3.a": "Chưa có. App viết bằng Tauri nên port được, nhưng hiện tại chỉ có installer cho Windows.",
     "faq.4.q": "Sao installer chưa ký?",
     "faq.4.a": "Cert code signing tốn tiền. Windows SmartScreen có thể cảnh báo — bấm <strong>More info</strong> → <strong>Run anyway</strong>. Source mở trên GitHub, build từ source nếu muốn.",
     "faq.5.q": "Bao lâu poll API 1 lần?",
