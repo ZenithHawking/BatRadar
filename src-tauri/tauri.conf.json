@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "BatRadar",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "com.batradar.app",
   "build": {
     "frontendDist": "../src"
@@ -15,18 +15,23 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["../src/assets/icons/icon.ico"],
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "../src/assets/icons/icon.ico"
+    ],
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "./windows/hooks.nsh"
       }
     }
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIwODE5REVFNkJDMDJDNQpSV1RGQXJ6bTNoa0lDMDdYSnloQXh6K2pveVJEK0RLeklVRHdTaklkWnZGNkZDY0lCdUZkUm5EOQo=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2RjA0MUE1NThCNThCMUIKUldRYmk3VllwVUh3dG1TZStnNFlLWHp6UGlwUWNJRFZjTnZDRWdNdlRqOGd4bzdtRENqMGllS3cK",
       "endpoints": [
         "https://github.com/ZenithHawking/BatRadar/releases/latest/download/latest.json"
       ]

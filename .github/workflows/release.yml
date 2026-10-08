@@ -11,42 +11,50 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Test
+        run: node --test src/js/season/
 
       - name: Build
-        run: npm run build
+        run: cargo tauri build
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Update manifests
+        shell: bash
+        run: node scripts/release-manifests.mjs "${GITHUB_REF_NAME#v}"
+
+      # Draft: a human checks the assets before users are offered the update
+      - uses: softprops/action-gh-release@v2
         with:
           name: BatRadar ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          draft: true
           files: |
-            dist/*.exe
-            dist/*.blockmap
-            dist/latest.yml
-            dist/builder-effective-config.yaml
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.sig
+            src-tauri/target/release/bundle/nsis/latest.json
+            src-tauri/target/release/bundle/nsis/latest.yml
           body: |
             ## BatRadar ${{ github.ref_name }}
 
             ### Cài đặt
-            Tải file `BatRadar Setup *.exe` và chạy để cài đặt.
+            Tải file `BatRadar_*_x64-setup.exe` và chạy. Bản cũ (Electron) được gỡ tự động, cài đặt được giữ nguyên.
 
             ### Yêu cầu
             - Windows 10/11
-            - Claude Code hoặc Codex đã đăng nhập
