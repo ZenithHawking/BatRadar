@@ -74,6 +74,7 @@ function applySettings(s) {
     document.getElementById('select-interval').value       = String(s.poll_interval_seconds);
     document.getElementById('select-alert').value          = String(s.alert_threshold);
     document.getElementById('toggle-notification').checked = s.notification_enabled;
+    document.getElementById('toggle-seasonal').checked = s.seasonal_theme !== false;
 }
 
 function renderProviders(providers) {
@@ -192,6 +193,7 @@ window.saveSettings = async () => {
         poll_interval_seconds: parseInt(document.getElementById('select-interval').value),
         alert_threshold:       parseFloat(document.getElementById('select-alert').value),
         notification_enabled:  document.getElementById('toggle-notification').checked,
+        seasonal_theme:        document.getElementById('toggle-seasonal').checked,
     };
     try {
         await invoke('save_settings', { settings });

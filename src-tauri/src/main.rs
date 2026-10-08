@@ -578,7 +578,8 @@ fn save_settings(app: AppHandle, settings: Value) {
     }
     if let Ok(cfg) = serde_json::from_value::<Config>(current) {
         config::save(&cfg);
-        set_autostart(app, cfg.autostart);
+        set_autostart(app.clone(), cfg.autostart);
+        let _ = app.emit("settings-changed", &cfg);
     }
 }
 
