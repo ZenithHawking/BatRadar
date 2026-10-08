@@ -517,3 +517,29 @@ window.toggleFloating = () => {
     floatingVisible = !floatingVisible;
     invoke(floatingVisible ? 'show_floating' : 'hide_floating');
 };
+
+// ─── Update banner ────────────────────────────────────────────────────────────
+const banner = document.getElementById('update-banner');
+const bannerText = document.getElementById('update-text');
+const bannerBtn = document.getElementById('update-btn');
+
+listen('update-available', ({ payload }) => {
+    bannerText.textContent = `Có bản ${payload.version}`;
+    bannerBtn.disabled = false;
+    bannerBtn.textContent = 'Cập nhật';
+    banner.hidden = false;
+});
+listen('update-progress', ({ payload }) => {
+    banner.hidden = false;
+    bannerBtn.disabled = true;
+    bannerText.textContent = payload.percent == null ? 'Đang tải…' : `Đang tải ${payload.percent}%…`;
+});
+listen('update-error', ({ payload }) => {
+    bannerBtn.disabled = false;
+    bannerBtn.textContent = 'Thử lại';
+    bannerText.textContent = `Lỗi cập nhật: ${payload.message}`;
+});
+window.installUpdate = () => {
+    bannerBtn.disabled = true;
+    invoke('install_update').catch(() => {});
+};

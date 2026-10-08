@@ -333,3 +333,20 @@ body {
   background: var(--border);
   margin: 2px 0 6px;
 }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-dim);
+  background: var(--accent-faint);
+  font-size: 11px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.update-banner[hidden] { display: none; }
+.update-banner button { padding: 4px 10px; font-size: 11px; }

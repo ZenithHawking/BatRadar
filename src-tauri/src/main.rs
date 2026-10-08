@@ -5,6 +5,7 @@ mod config;
 mod creds;
 mod history;
 mod providers;
+mod updater;
 
 use config::{Config, Pos};
 use providers::{AgServer, Usage};
@@ -833,20 +834,6 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-#[tauri::command]
-async fn check_for_updates(app: AppHandle) -> Result<bool, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-    let Some(update) = update else { return Ok(false) };
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|e| e.to_string())?;
-    app.request_restart();
-    Ok(true)
-}
-
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 fn main() {
@@ -894,7 +881,8 @@ fn main() {
             set_display_providers,
             open_external,
             get_app_version,
-            check_for_updates,
+            updater::check_update,
+            updater::install_update,
             get_usage_history,
         ])
         .setup(|app| {
@@ -938,6 +926,8 @@ fn main() {
                     }
                 })
                 .build(app)?;
+
+            updater::spawn_auto_check(handle.clone());
 
             // Show the dashboard shortly after startup, like the Electron build
             let h = handle.clone();
