@@ -849,6 +849,21 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// The Electron updater runs the 0.4.0 installer from its own cache folder, so
+/// the installer cannot delete it; anything of the Electron install it could
+/// not remove is cleaned here once the installer has exited.
+fn cleanup_electron_leftovers() {
+    let Some(local) = dirs::data_local_dir() else { return };
+    for dir in [local.join("bat-radar-updater"), local.join("Programs").join("bat-radar")] {
+        if dir.exists() {
+            match std::fs::remove_dir_all(&dir) {
+                Ok(()) => println!("[BatRadar] removed leftover {}", dir.display()),
+                Err(e) => eprintln!("[BatRadar] could not remove {}: {e}", dir.display()),
+            }
+        }
+    }
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 fn main() {
@@ -943,6 +958,10 @@ fn main() {
                 .build(app)?;
 
             updater::spawn_auto_check(handle.clone());
+            tauri::async_runtime::spawn(async {
+                tokio::time::sleep(Duration::from_secs(15)).await;
+                cleanup_electron_leftovers();
+            });
 
             // Show the dashboard shortly after startup, like the Electron build
             let h = handle.clone();
