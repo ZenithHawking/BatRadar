@@ -449,13 +449,19 @@ fn show_window(app: &AppHandle, label: &str) {
 /// apps, explorer restart) without hiding it, and tao's set_always_on_top is a
 /// no-op when its own flag is already set — so push the HWND back to the
 /// topmost band directly. NOACTIVATE keeps focus where the user left it.
+/// Only when the flag is actually gone — re-asserting it every tick would make
+/// the icon jump above other always-on-top windows (picture-in-picture video).
 #[cfg(windows)]
 fn reassert_topmost(w: &tauri::WebviewWindow) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+        GetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOOWNERZORDER, SWP_NOSIZE, WS_EX_TOPMOST,
     };
     if let Ok(hwnd) = w.hwnd() {
         unsafe {
+            if GetWindowLongPtrW(hwnd.0 as _, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0 {
+                return;
+            }
             SetWindowPos(
                 hwnd.0 as _,
                 HWND_TOPMOST,
