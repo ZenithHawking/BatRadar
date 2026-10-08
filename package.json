@@ -8,7 +8,8 @@
     "start": "electron .",
     "dev": "electron . --inspect",
     "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "build:dir": "electron-builder --win --dir",
+    "test": "node --test src/js/season/"
   },
   "build": {
     "appId": "com.batradar.app",
