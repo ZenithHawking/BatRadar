@@ -1,6 +1,7 @@
 // Prevent a console window from appearing on Windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alerts;
 mod config;
 mod creds;
 mod history;
@@ -39,9 +40,7 @@ struct ProviderState {
     last_poll_at: Option<Instant>,
     last_refresh_at: Option<Instant>,
     alert_reset_at: Option<String>,
-    alert_warn: bool,
-    alert_crit: bool,
-    alert_limit: bool,
+    alert_flags: alerts::AlertFlags,
     /// Gemini: resolved once per run
     project_id: Option<String>,
     plan: Option<String>,
@@ -368,29 +367,19 @@ fn check_alerts(app: &AppHandle, id: &str, data: &Usage, cfg: &Config) {
     let rst = fmt_dur(secs);
 
     // A new quota window resets which alerts have already fired
-    let fresh_window = with_state(app, id, |st| {
+    let level = with_state(app, id, |st| {
         if st.alert_reset_at != session.reset_at {
             st.alert_reset_at = session.reset_at.clone();
-            st.alert_warn = false;
-            st.alert_crit = false;
-            st.alert_limit = false;
+            st.alert_flags = alerts::AlertFlags::default();
         }
-        (st.alert_warn, st.alert_crit, st.alert_limit)
+        alerts::pick(util, cfg.alert_threshold, cfg.critical_threshold, &mut st.alert_flags)
     });
-    let (warned, crit, limit) = fresh_window;
-
     let name = provider_name(id);
-    let (sub, body) = if util >= 1.0 && !limit {
-        with_state(app, id, |st| st.alert_limit = true);
-        ("Limit Reached", format!("Session full! Resets in {rst}"))
-    } else if util >= cfg.critical_threshold && !crit {
-        with_state(app, id, |st| st.alert_crit = true);
-        ("Critical", format!("Session {pct}%! Resets in {rst}"))
-    } else if util >= cfg.alert_threshold && !warned {
-        with_state(app, id, |st| st.alert_warn = true);
-        ("Warning", format!("Session {pct}%. Resets in {rst}"))
-    } else {
-        return;
+    let (sub, body) = match level {
+        Some(alerts::Level::Limit) => ("Limit Reached", format!("Session full! Resets in {rst}")),
+        Some(alerts::Level::Critical) => ("Critical", format!("Session {pct}%! Resets in {rst}")),
+        Some(alerts::Level::Warning) => ("Warning", format!("Session {pct}%. Resets in {rst}")),
+        None => return,
     };
     let _ = app
         .notification()
@@ -455,6 +444,32 @@ fn show_window(app: &AppHandle, label: &str) {
         let _ = w.set_focus();
     }
 }
+
+/// Windows can drop WS_EX_TOPMOST from the overlay (display sleep, fullscreen
+/// apps, explorer restart) without hiding it, and tao's set_always_on_top is a
+/// no-op when its own flag is already set — so push the HWND back to the
+/// topmost band directly. NOACTIVATE keeps focus where the user left it.
+#[cfg(windows)]
+fn reassert_topmost(w: &tauri::WebviewWindow) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+    };
+    if let Ok(hwnd) = w.hwnd() {
+        unsafe {
+            SetWindowPos(
+                hwnd.0 as _,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+            );
+        }
+    }
+}
+#[cfg(not(windows))]
+fn reassert_topmost(_w: &tauri::WebviewWindow) {}
 
 fn hide_window(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
@@ -965,8 +980,8 @@ fn main() {
                         Some(w) => {
                             if matches!(w.is_visible(), Ok(false)) {
                                 let _ = w.show();
-                                let _ = w.set_always_on_top(true);
                             }
+                            reassert_topmost(&w);
                         }
                         None => {
                             let cfg = config::load();
