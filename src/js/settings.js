@@ -1,4 +1,4 @@
-import { invoke } from './utils.js';
+import { invoke, listen } from './utils.js';
 import { icon } from './icons.js';
 
 let cfg = null;
@@ -57,23 +57,42 @@ async function loadAppVersion() {
 
 window.checkUpdates = async () => {
     const btn = document.getElementById('btn-check-updates');
-    if (btn) { btn.disabled = true; btn.textContent = 'Đang kiểm tra…'; }
+    const out = document.getElementById('update-result');
+    btn.disabled = true;
+    btn.textContent = 'Đang kiểm tra…';
+    out.textContent = '';
     try {
-        await invoke('check_for_updates');
+        const info = await invoke('check_update');
+        if (info.available) {
+            out.textContent = `Có bản ${info.version}`;
+            btn.textContent = 'Cập nhật';
+            btn.disabled = false;
+            btn.onclick = () => {
+                btn.disabled = true;
+                out.textContent = 'Đang tải…';
+                invoke('install_update').catch(e => { out.textContent = `Lỗi: ${e}`; btn.disabled = false; });
+            };
+            return;
+        }
+        out.textContent = `Đã là bản mới nhất (${info.current})`;
     } catch (e) {
-        alert('Lỗi: ' + e);
-    } finally {
-        setTimeout(() => {
-            if (btn) { btn.disabled = false; btn.textContent = 'Kiểm tra'; }
-        }, 2000);
+        out.textContent = `Lỗi: ${e}`;
     }
+    btn.disabled = false;
+    btn.textContent = 'Kiểm tra';
 };
+
+listen('update-progress', ({ payload }) => {
+    const out = document.getElementById('update-result');
+    if (out) out.textContent = payload.percent == null ? 'Đang tải…' : `Đang tải ${payload.percent}%…`;
+});
 
 function applySettings(s) {
     document.getElementById('toggle-autostart').checked    = s.autostart;
     document.getElementById('select-interval').value       = String(s.poll_interval_seconds);
     document.getElementById('select-alert').value          = String(s.alert_threshold);
     document.getElementById('toggle-notification').checked = s.notification_enabled;
+    document.getElementById('toggle-seasonal').checked = s.seasonal_theme !== false;
 }
 
 function renderProviders(providers) {
@@ -192,6 +211,7 @@ window.saveSettings = async () => {
         poll_interval_seconds: parseInt(document.getElementById('select-interval').value),
         alert_threshold:       parseFloat(document.getElementById('select-alert').value),
         notification_enabled:  document.getElementById('toggle-notification').checked,
+        seasonal_theme:        document.getElementById('toggle-seasonal').checked,
     };
     try {
         await invoke('save_settings', { settings });

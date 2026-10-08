@@ -1,10 +1,12 @@
 // Prevent a console window from appearing on Windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alerts;
 mod config;
 mod creds;
 mod history;
 mod providers;
+mod updater;
 
 use config::{Config, Pos};
 use providers::{AgServer, Usage};
@@ -22,8 +24,8 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 
 const FLOAT_SIZE: f64 = 62.0;
-/// Mirrors the Electron build's `floatingIntentionallyHidden` — the recovery
-/// loop below skips re-showing the icon when the user hid it on purpose.
+/// Set when the user hides the icon on purpose, so the recovery loop below
+/// does not bring it back.
 static FLOATING_HIDDEN: AtomicBool = AtomicBool::new(false);
 /// Minimum gap between calls to the same provider, on top of any 429 backoff
 const MIN_POLL_GAP: Duration = Duration::from_secs(30);
@@ -38,9 +40,7 @@ struct ProviderState {
     last_poll_at: Option<Instant>,
     last_refresh_at: Option<Instant>,
     alert_reset_at: Option<String>,
-    alert_warn: bool,
-    alert_crit: bool,
-    alert_limit: bool,
+    alert_flags: alerts::AlertFlags,
     /// Gemini: resolved once per run
     project_id: Option<String>,
     plan: Option<String>,
@@ -367,29 +367,19 @@ fn check_alerts(app: &AppHandle, id: &str, data: &Usage, cfg: &Config) {
     let rst = fmt_dur(secs);
 
     // A new quota window resets which alerts have already fired
-    let fresh_window = with_state(app, id, |st| {
+    let level = with_state(app, id, |st| {
         if st.alert_reset_at != session.reset_at {
             st.alert_reset_at = session.reset_at.clone();
-            st.alert_warn = false;
-            st.alert_crit = false;
-            st.alert_limit = false;
+            st.alert_flags = alerts::AlertFlags::default();
         }
-        (st.alert_warn, st.alert_crit, st.alert_limit)
+        alerts::pick(util, cfg.alert_threshold, cfg.critical_threshold, &mut st.alert_flags)
     });
-    let (warned, crit, limit) = fresh_window;
-
     let name = provider_name(id);
-    let (sub, body) = if util >= 1.0 && !limit {
-        with_state(app, id, |st| st.alert_limit = true);
-        ("Limit Reached", format!("Session full! Resets in {rst}"))
-    } else if util >= cfg.critical_threshold && !crit {
-        with_state(app, id, |st| st.alert_crit = true);
-        ("Critical", format!("Session {pct}%! Resets in {rst}"))
-    } else if util >= cfg.alert_threshold && !warned {
-        with_state(app, id, |st| st.alert_warn = true);
-        ("Warning", format!("Session {pct}%. Resets in {rst}"))
-    } else {
-        return;
+    let (sub, body) = match level {
+        Some(alerts::Level::Limit) => ("Limit Reached", format!("Session full! Resets in {rst}")),
+        Some(alerts::Level::Critical) => ("Critical", format!("Session {pct}%! Resets in {rst}")),
+        Some(alerts::Level::Warning) => ("Warning", format!("Session {pct}%. Resets in {rst}")),
+        None => return,
     };
     let _ = app
         .notification()
@@ -454,6 +444,38 @@ fn show_window(app: &AppHandle, label: &str) {
         let _ = w.set_focus();
     }
 }
+
+/// Windows can drop WS_EX_TOPMOST from the overlay (display sleep, fullscreen
+/// apps, explorer restart) without hiding it, and tao's set_always_on_top is a
+/// no-op when its own flag is already set — so push the HWND back to the
+/// topmost band directly. NOACTIVATE keeps focus where the user left it.
+/// Only when the flag is actually gone — re-asserting it every tick would make
+/// the icon jump above other always-on-top windows (picture-in-picture video).
+#[cfg(windows)]
+fn reassert_topmost(w: &tauri::WebviewWindow) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOOWNERZORDER, SWP_NOSIZE, WS_EX_TOPMOST,
+    };
+    if let Ok(hwnd) = w.hwnd() {
+        unsafe {
+            if GetWindowLongPtrW(hwnd.0 as _, GWL_EXSTYLE) & WS_EX_TOPMOST as isize != 0 {
+                return;
+            }
+            SetWindowPos(
+                hwnd.0 as _,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+            );
+        }
+    }
+}
+#[cfg(not(windows))]
+fn reassert_topmost(_w: &tauri::WebviewWindow) {}
 
 fn hide_window(app: &AppHandle, label: &str) {
     if let Some(w) = app.get_webview_window(label) {
@@ -578,7 +600,8 @@ fn save_settings(app: AppHandle, settings: Value) {
     }
     if let Ok(cfg) = serde_json::from_value::<Config>(current) {
         config::save(&cfg);
-        set_autostart(app, cfg.autostart);
+        set_autostart(app.clone(), cfg.autostart);
+        let _ = app.emit("settings-changed", &cfg);
     }
 }
 
@@ -787,10 +810,6 @@ fn move_floating(app: AppHandle, dx: f64, dy: f64) {
     }
 }
 
-/// Kept for renderer compatibility with the Electron build
-#[tauri::command]
-fn set_float_interactive() {}
-
 #[tauri::command]
 fn show_floating(app: AppHandle) {
     FLOATING_HIDDEN.store(false, Ordering::Relaxed);
@@ -832,18 +851,19 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-#[tauri::command]
-async fn check_for_updates(app: AppHandle) -> Result<bool, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-    let Some(update) = update else { return Ok(false) };
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|e| e.to_string())?;
-    app.request_restart();
-    Ok(true)
+/// The Electron updater runs the 0.4.0 installer from its own cache folder, so
+/// the installer cannot delete it; anything of the Electron install it could
+/// not remove is cleaned here once the installer has exited.
+fn cleanup_electron_leftovers() {
+    let Some(local) = dirs::data_local_dir() else { return };
+    for dir in [local.join("bat-radar-updater"), local.join("Programs").join("bat-radar")] {
+        if dir.exists() {
+            match std::fs::remove_dir_all(&dir) {
+                Ok(()) => println!("[BatRadar] removed leftover {}", dir.display()),
+                Err(e) => eprintln!("[BatRadar] could not remove {}: {e}", dir.display()),
+            }
+        }
+    }
 }
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
@@ -886,14 +906,14 @@ fn main() {
             get_floating_position,
             set_floating_pos,
             move_floating,
-            set_float_interactive,
             show_floating,
             hide_floating,
             get_display_providers,
             set_display_providers,
             open_external,
             get_app_version,
-            check_for_updates,
+            updater::check_update,
+            updater::install_update,
             get_usage_history,
         ])
         .setup(|app| {
@@ -938,7 +958,13 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Show the dashboard shortly after startup, like the Electron build
+            updater::spawn_auto_check(handle.clone());
+            tauri::async_runtime::spawn(async {
+                tokio::time::sleep(Duration::from_secs(15)).await;
+                cleanup_electron_leftovers();
+            });
+
+            // Show the dashboard shortly after startup
             let h = handle.clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(400)).await;
@@ -974,8 +1000,8 @@ fn main() {
                         Some(w) => {
                             if matches!(w.is_visible(), Ok(false)) {
                                 let _ = w.show();
-                                let _ = w.set_always_on_top(true);
                             }
+                            reassert_topmost(&w);
                         }
                         None => {
                             let cfg = config::load();

@@ -16,12 +16,16 @@ const ICONS = {
 // ─── Live updates (all providers) ─────────────────────────────────────────────
 listen('usage-update', ({ payload }) => {
     const card = document.getElementById(`card-${payload.provider}`);
-    if (card) { renderUsage(card, payload.provider, payload.data); updateStatus('Updated just now'); }
+    if (!card) return;
+    if (!card.querySelector(`#rows-${payload.provider}`)) { rebuildCard(payload.provider); return; }
+    renderUsage(card, payload.provider, payload.data);
+    updateStatus('Updated just now');
 });
 
 listen('provider-status-changed', ({ payload }) => {
     const card = document.getElementById(`card-${payload.provider}`);
     if (!card) return;
+    if (payload.status === 'connected' && !card.querySelector(`#rows-${payload.provider}`)) { rebuildCard(payload.provider); return; }
     const badge = card.querySelector('.status-badge');
     if (badge) { badge.className = `status-badge ${payload.status}`; badge.textContent = statusLabel(payload.status); }
     if (payload.status === 'disabled') {
@@ -51,42 +55,241 @@ async function loadAndDrawChart(id) {
     drawChart(id);
 }
 
+const RANGES = { '24h': 86400, '7d': 7 * 86400, '30d': 30 * 86400 };
+// Raw 15-min points turn into a solid block over weeks — longer ranges
+// plot the peak of each bucket instead
+const BUCKETS = { '24h': 0, '7d': 6 * 3600, '30d': 86400 };
+const chartRange = new Map();   // id -> range key
+const chartHover = new Map();   // id -> hovered point or null
+// Points are logged every ~15min; a longer silence means the app was off,
+// so the line breaks there instead of drawing a fake straight segment
+const GAP_SECS = 45 * 60;
+const PAD = { l: 34, r: 8, t: 8, b: 18 };
+
+function historyBlock(id) {
+    return `<div class="history" id="history-${id}">
+      <div class="history-head">
+        <span class="history-title">Lịch sử</span>
+        <span class="history-stats" id="hstats-${id}"></span>
+        <div class="history-ranges">
+          ${Object.keys(RANGES).map(r => `<button data-range="${r}" class="${r === '24h' ? 'on' : ''}">${r}</button>`).join('')}
+        </div>
+      </div>
+      <div class="history-plot">
+        <canvas class="history-chart" id="chart-${id}"></canvas>
+        <div class="history-tip" id="htip-${id}" hidden></div>
+      </div>
+    </div>`;
+}
+
+function wireHistory(card, id) {
+    const box = card.querySelector(`#history-${id}`);
+    if (!box) return;
+    box.addEventListener('click', e => e.stopPropagation());
+    box.querySelectorAll('.history-ranges button').forEach(btn => btn.addEventListener('click', () => {
+        chartRange.set(id, btn.dataset.range);
+        box.querySelectorAll('.history-ranges button').forEach(b => b.classList.toggle('on', b === btn));
+        drawChart(id);
+    }));
+    const canvas = box.querySelector('canvas');
+    canvas.addEventListener('mousemove', e => {
+        const { series, xOf } = chartGeometry(id, canvas);
+        if (!series.length) return;
+        const mx = e.offsetX;
+        let best = null, bestDx = Infinity;
+        for (const p of series) {
+            const dx = Math.abs(xOf(p.ts) - mx);
+            if (dx < bestDx) { bestDx = dx; best = p; }
+        }
+        chartHover.set(id, bestDx <= 24 ? best : null);
+        drawChart(id);
+    });
+    canvas.addEventListener('mouseleave', () => { chartHover.set(id, null); drawChart(id); });
+}
+
+function seriesFor(id) {
+    const now = Math.floor(Date.now() / 1000);
+    const rangeKey = chartRange.get(id) || '24h';
+    const rangeFrom = now - RANGES[rangeKey];
+    const raw = (historyCache.get(id) || []).filter(p => p.ts >= rangeFrom).sort((a, b) => a.ts - b.ts);
+    const size = BUCKETS[rangeKey];
+    let points = raw;
+    if (size) {
+        // Buckets align to local midnight so a "day" means a calendar day
+        const tz = new Date().getTimezoneOffset() * 60;
+        const byStart = new Map();
+        for (const p of raw) {
+            const start = Math.floor((p.ts - tz) / size) * size + tz;
+            const b = byStart.get(start);
+            if (!b || p.risk > b.risk) byStart.set(start, { start, risk: p.risk });
+        }
+        points = [...byStart.values()].map(b => ({ ts: Math.min(b.start + size / 2, now), start: b.start, risk: b.risk }));
+    }
+    // Fit the x axis to the data actually logged — a fresh install with a
+    // few hours of history would otherwise be a sliver at the right edge
+    const from = raw.length ? Math.min(raw[0].ts, now - 3600) : rangeFrom;
+    const risk = lastRisk.get(id);
+    if (risk != null) points.push({ ts: now, risk, live: true });
+    // Neighbouring buckets are `size` apart by design — only a bigger jump is a gap
+    return { series: points, raw, from, now, size, gap: Math.max(GAP_SECS, size * 1.5) };
+}
+
+function chartGeometry(id, canvas) {
+    const s = seriesFor(id);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const pw = w - PAD.l - PAD.r, ph = h - PAD.t - PAD.b;
+    const xOf = ts => PAD.l + ((ts - s.from) / (s.now - s.from)) * pw;
+    const yOf = r => PAD.t + (1 - Math.min(Math.max(r, 0), 1)) * ph;
+    return { ...s, w, h, pw, ph, xOf, yOf };
+}
+
+function fmtTick(ts, spanSecs) {
+    const d = new Date(ts * 1000);
+    const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0'), mo = String(d.getMonth() + 1).padStart(2, '0');
+    if (spanSecs <= 86400) return `${hh}:${mm}`;
+    if (spanSecs <= 3 * 86400) return `${dd}/${mo} ${hh}h`;
+    return `${dd}/${mo}`;
+}
+
+function fmtSpan(secs) {
+    if (secs >= 86400) return `${Math.round(secs / 86400)} ngày`;
+    return `${Math.max(1, Math.round(secs / 3600))} giờ`;
+}
+
 function drawChart(id) {
     const canvas = document.getElementById(`chart-${id}`);
-    if (!canvas) return;
+    if (!canvas || !canvas.clientWidth) return;
+    // Size the backing store to the element so text stays crisp at any DPI
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(canvas.clientWidth * dpr)) {
+        canvas.width = Math.round(canvas.clientWidth * dpr);
+        canvas.height = Math.round(canvas.clientHeight * dpr);
+    }
     const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = chartGeometry(id, canvas);
+    const { series, raw, from, now, w, h, pw, xOf, yOf } = g;
+    const rangeKey = chartRange.get(id) || '24h';
+    const css = getComputedStyle(document.documentElement);
+    const grid = css.getPropertyValue('--border').trim() || '#2a2a38';
+    const muted = css.getPropertyValue('--text-dim').trim() || '#9494a2';
     ctx.clearRect(0, 0, w, h);
+    ctx.font = '9px "Segoe UI", sans-serif';
 
-    const points = historyCache.get(id) || [];
-    const risk = lastRisk.get(id);
-    const series = risk == null ? points : [...points, { ts: Math.floor(Date.now() / 1000), risk }];
+    // Y axis: 0 / 50 / 100 %
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const r of [0, 0.5, 1]) {
+        const y = Math.round(yOf(r)) + 0.5;
+        ctx.strokeStyle = grid;
+        ctx.lineWidth = 1;
+        ctx.setLineDash(r === 0 ? [] : [2, 3]);
+        ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(w - PAD.r, y); ctx.stroke();
+        ctx.fillStyle = muted;
+        ctx.fillText(`${r * 100}%`, PAD.l - 5, y);
+    }
+    ctx.setLineDash([]);
+
+    // X axis: evenly spaced time ticks across the selected window
+    ctx.textBaseline = 'top';
+    const ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+        const ts = from + ((now - from) * i) / ticks;
+        ctx.textAlign = i === 0 ? 'left' : i === ticks ? 'right' : 'center';
+        ctx.fillStyle = muted;
+        ctx.fillText(i === ticks ? 'Bây giờ' : fmtTick(ts, now - from), xOf(ts), h - PAD.b + 5);
+    }
+
+    const stats = document.getElementById(`hstats-${id}`);
+    // Stats come from the raw log — averaging bucket peaks would overstate usage
+    if (stats) {
+        if (raw.length) {
+            const peak = Math.max(...raw.map(p => p.risk));
+            const avg = raw.reduce((s, p) => s + p.risk, 0) / raw.length;
+            // Say so when the log is shorter than the selected range
+            const short = now - from < RANGES[rangeKey] - 3600 ? ` · có ${fmtSpan(now - from)}` : '';
+            stats.textContent = `Đỉnh ${Math.round(peak * 100)}% · TB ${Math.round(avg * 100)}%${short}`;
+        } else stats.textContent = '';
+    }
+
     if (series.length < 2) {
-        ctx.fillStyle = 'rgba(148,163,184,0.6)';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('Chưa đủ dữ liệu lịch sử', 6, h / 2 + 3);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = muted;
+        ctx.font = '10px "Segoe UI", sans-serif';
+        ctx.fillText('Chưa đủ dữ liệu — mỗi 15 phút ghi 1 điểm', PAD.l + pw / 2, (PAD.t + h - PAD.b) / 2);
+        updateTip(id, null, g);
         return;
     }
 
-    const minTs = series[0].ts, maxTs = series[series.length - 1].ts;
-    const spanTs = Math.max(maxTs - minTs, 1);
-    const color = usageColor(series[series.length - 1].risk);
-    const x = (p) => 2 + (spanTs ? (p.ts - minTs) / spanTs : 0) * (w - 4);
-    const y = (p) => h - 3 - p.risk * (h - 6);
+    // Split into runs wherever the app was off long enough to leave a gap
+    const runs = [];
+    let run = [series[0]];
+    for (let i = 1; i < series.length; i++) {
+        if (series[i].ts - series[i - 1].ts > g.gap) { runs.push(run); run = []; }
+        run.push(series[i]);
+    }
+    runs.push(run);
 
-    ctx.beginPath();
-    series.forEach((p, i) => (i === 0 ? ctx.moveTo(x(p), y(p)) : ctx.lineTo(x(p), y(p))));
-    ctx.lineTo(x(series[series.length - 1]), h - 1);
-    ctx.lineTo(x(series[0]), h - 1);
-    ctx.closePath();
-    ctx.fillStyle = color + '26';
-    ctx.fill();
+    const color = PROVIDER_COLORS[id] || '#94a3b8';
+    const base = yOf(0);
+    for (const r of runs) {
+        ctx.beginPath();
+        r.forEach((p, i) => (i === 0 ? ctx.moveTo(xOf(p.ts), yOf(p.risk)) : ctx.lineTo(xOf(p.ts), yOf(p.risk))));
+        if (r.length > 1) {
+            ctx.lineTo(xOf(r[r.length - 1].ts), base);
+            ctx.lineTo(xOf(r[0].ts), base);
+            ctx.closePath();
+            ctx.fillStyle = color + '22';
+            ctx.fill();
+            ctx.beginPath();
+            r.forEach((p, i) => (i === 0 ? ctx.moveTo(xOf(p.ts), yOf(p.risk)) : ctx.lineTo(xOf(p.ts), yOf(p.risk))));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(xOf(r[0].ts), yOf(r[0].risk), 2, 0, Math.PI * 2); ctx.fill();
+        }
+    }
 
-    ctx.beginPath();
-    series.forEach((p, i) => (i === 0 ? ctx.moveTo(x(p), y(p)) : ctx.lineTo(x(p), y(p))));
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const hp = chartHover.get(id);
+    if (hp) {
+        const x = xOf(hp.ts), y = yOf(hp.risk);
+        ctx.strokeStyle = muted;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, PAD.t); ctx.lineTo(Math.round(x) + 0.5, base); ctx.stroke();
+        // Surface ring keeps the marker legible on top of the line
+        ctx.fillStyle = css.getPropertyValue('--bg-card').trim() || '#13131a';
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    updateTip(id, hp, g);
+}
+
+function updateTip(id, p, g) {
+    const tip = document.getElementById(`htip-${id}`);
+    if (!tip) return;
+    if (!p) { tip.hidden = true; return; }
+    const d = new Date(p.ts * 1000);
+    const two = n => String(n).padStart(2, '0');
+    const day = t => `${two(t.getDate())}/${two(t.getMonth() + 1)}`;
+    let when;
+    if (p.live) when = 'Hiện tại';
+    else if (p.start != null && g.size >= 86400) when = `Đỉnh ngày ${day(d)}`;
+    else if (p.start != null) {
+        const s = new Date(p.start * 1000), e = new Date((p.start + g.size) * 1000);
+        when = `Đỉnh ${two(s.getHours())}h–${two(e.getHours())}h ${day(s)}`;
+    } else when = `${two(d.getHours())}:${two(d.getMinutes())} · ${day(d)}`;
+    tip.innerHTML = `<span class="tip-val" style="color:${usageColor(p.risk)}">${Math.round(p.risk * 100)}%</span><span class="tip-when">${when}</span>`;
+    tip.hidden = false;
+    const x = g.xOf(p.ts);
+    const tw = tip.offsetWidth;
+    tip.style.left = `${Math.min(Math.max(x - tw / 2, 0), g.w - tw)}px`;
+    tip.style.top = `${Math.max(g.yOf(p.risk) - 34, 0)}px`;
 }
 
 // ─── Drag-to-reorder ──────────────────────────────────────────────────────────
@@ -211,9 +414,10 @@ function buildCard(p) {
                 <button class="btn-ghost" onclick="window.openSettings()">Setup</button>
                </div>`
             : `<div id="rows-${p.id}"><div style="color:var(--text-dim);font-size:11px;padding:8px;text-align:center">Loading…</div></div>
-               <canvas class="history-chart" id="chart-${p.id}" width="300" height="56"></canvas>`
+               ${historyBlock(p.id)}`
         }
       </div>`;
+    wireHistory(card, p.id);
     card.querySelector('.provider-header').addEventListener('click', () => {
         const wasExpanded = card.classList.contains('expanded');
         card.classList.toggle('expanded');
@@ -221,6 +425,22 @@ function buildCard(p) {
     });
     makeDraggable(card);
     return card;
+}
+
+// A card built while its provider was disconnected has no rows to fill; when
+// the provider connects later (Antigravity is discovered on the first poll,
+// or the user re-enables one) swap in a freshly built card in place.
+async function rebuildCard(id) {
+    const old = document.getElementById(`card-${id}`);
+    if (!old) return;
+    const p = (await invoke('get_providers')).find(x => x.id === id);
+    if (!p) return;
+    const card = buildCard(p);
+    if (old.classList.contains('expanded')) card.classList.add('expanded');
+    old.replaceWith(card);
+    if (p.status === 'connected') {
+        try { renderUsage(card, id, await invoke('get_usage', { provider: id })); } catch { /* next poll fills it */ }
+    }
 }
 
 function renderUsage(card, id, data) {
@@ -316,4 +536,30 @@ let floatingVisible = true;
 window.toggleFloating = () => {
     floatingVisible = !floatingVisible;
     invoke(floatingVisible ? 'show_floating' : 'hide_floating');
+};
+
+// ─── Update banner ────────────────────────────────────────────────────────────
+const banner = document.getElementById('update-banner');
+const bannerText = document.getElementById('update-text');
+const bannerBtn = document.getElementById('update-btn');
+
+listen('update-available', ({ payload }) => {
+    bannerText.textContent = `Có bản ${payload.version}`;
+    bannerBtn.disabled = false;
+    bannerBtn.textContent = 'Cập nhật';
+    banner.hidden = false;
+});
+listen('update-progress', ({ payload }) => {
+    banner.hidden = false;
+    bannerBtn.disabled = true;
+    bannerText.textContent = payload.percent == null ? 'Đang tải…' : `Đang tải ${payload.percent}%…`;
+});
+listen('update-error', ({ payload }) => {
+    bannerBtn.disabled = false;
+    bannerBtn.textContent = 'Thử lại';
+    bannerText.textContent = `Lỗi cập nhật: ${payload.message}`;
+});
+window.installUpdate = () => {
+    bannerBtn.disabled = true;
+    invoke('install_update').catch(() => {});
 };

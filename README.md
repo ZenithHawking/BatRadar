@@ -3,7 +3,7 @@
 > Monitor your AI coding tool usage limits — Claude Code, Codex, Gemini CLI, Copilot, OpenRouter, Antigravity — from a floating desktop overlay.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Electron](https://img.shields.io/badge/Electron-35-47848F?logo=electron)
+![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/ZenithHawking/BatRadar)
 
@@ -35,9 +35,11 @@ When usage gets high, it sends a Windows notification before you hit the limit.
 
 ## Download
 
-Go to [**Releases**](https://github.com/ZenithHawking/BatRadar/releases) and download `BatRadar Setup x.x.x.exe`.
+Go to [**Releases**](https://github.com/ZenithHawking/BatRadar/releases) and download `BatRadar_x.x.x_x64-setup.exe` (~5 MB).
 
-Run the installer — no configuration needed. BatRadar will appear in your system tray immediately.
+Run the installer — no configuration needed. BatRadar will appear in your system tray immediately and keeps itself up to date (it asks before installing).
+
+Upgrading from 0.3.x (the old Electron build): accept the in-app update — it installs 0.4.0, removes the old version and keeps your settings in `%APPDATA%\batradar`.
 
 ---
 
@@ -45,7 +47,8 @@ Run the installer — no configuration needed. BatRadar will appear in your syst
 
 - **Floating overlay** — a draggable circular icon that shows your highest current usage % and pulses a radar-style glow that speeds up and reddens as you approach the limit
 - **Dashboard** — click the icon to open a panel with per-provider usage bars (5h session, 7-day weekly, Opus/Sonnet breakdowns, extra credit spend); cards are collapsible and can be reordered by drag-and-drop
-- **Usage history** *(Tauri build)* — a sparkline chart per provider built from a lightweight local log, so you can see burn-rate over the last 30 days
+- **Usage history** — a chart per provider (24h / 7d / 30d) built from a lightweight local log, so you can see burn-rate over the last 30 days
+- **Seasonal themes** — the dashboard and overlay dress up for events like Halloween; can be turned off in Settings
 - **Live polling** — auto-refreshes in the background with a configurable interval (default 30s), rate-limit safe
 - **Alerts** — desktop notifications at warning (80%) and critical (95%) thresholds before you hit the wall
 - **System tray** — runs quietly in the background, right-click to access dashboard or settings
@@ -72,22 +75,15 @@ BatRadar reads credentials directly from the files these tools create on your ma
 
 ## Building from source
 
-Two runtimes live in this repo while the Tauri migration is in progress. The
-renderer under `src/` is shared — `src/js/utils.js` detects which runtime it is
-running under, so the same HTML/CSS/JS serves both.
+Requires the Rust toolchain, the MSVC build tools ("Desktop development with C++") and the Tauri CLI (`cargo install tauri-cli --version "^2"`).
 
-| | Electron (`main.js`) | Tauri (`src-tauri/`) |
-|---|---|---|
-| Build | `npm run build` | `npx @tauri-apps/cli@2 build` |
-| Installer size | ~84 MB | ~4.5 MB |
-| Requires | Node | Node + Rust toolchain + MSVC build tools |
-
-The Tauri build has an auto-updater wired up (`tauri-plugin-updater`, signed
-releases) but it isn't in the GitHub Actions release pipeline yet — published
-releases are still the Electron build. Everything else — all six providers,
-tray, alerts, floating overlay, autostart, single-instance — is at parity
-with the Electron build, plus a usage-history sparkline that Electron doesn't
-have (no equivalent IPC command wired there).
+```bash
+git clone https://github.com/ZenithHawking/BatRadar.git
+cd BatRadar
+cargo tauri dev     # run with hot-reloaded UI
+cargo tauri build   # installer in src-tauri/target/release/bundle/nsis/
+npm test            # seasonal-theme unit tests (Node 18+)
+```
 
 ---
 
@@ -120,21 +116,7 @@ have (no equivalent IPC command wired there).
 
 ## Running from Source
 
-Requires **Node.js 18+**.
-
-```bash
-git clone https://github.com/ZenithHawking/BatRadar.git
-cd BatRadar
-npm install
-npm start
-```
-
-### Build installer
-
-```bash
-npm run build
-# Output: dist/BatRadar Setup x.x.x.exe
-```
+See [Building from source](#building-from-source).
 
 ---
 
@@ -142,20 +124,22 @@ npm run build
 
 ```
 BatRadar/
-├── main.js              # Electron main process — windows, tray, polling, IPC
-├── preload.js           # Context bridge (renderer ↔ main)
-├── src/
+├── src/                 # UI (plain HTML/CSS/JS ES modules)
 │   ├── index.html       # Dashboard window
 │   ├── floating.html    # Floating overlay window
 │   ├── settings.html    # Settings window
 │   ├── js/
-│   │   ├── dashboard.js # Dashboard UI logic
+│   │   ├── dashboard.js # Dashboard UI logic + history chart
 │   │   ├── floating.js  # Overlay drag & display logic
 │   │   ├── settings.js  # Settings form & provider management
+│   │   ├── season/      # Seasonal theme engine (+ node:test suites)
 │   │   └── utils.js     # Shared helpers
+│   ├── themes/          # Bundled offline copy of themes/
 │   ├── css/             # Per-window stylesheets
 │   └── assets/icons/    # Provider icons, tray icon, app icon
-├── src-tauri/            # Tauri backend (windows, tray, polling, IPC, history log) — in progress
+├── src-tauri/           # Rust backend — windows, tray, polling, IPC, updater, history log
+├── themes/              # Seasonal themes + schedule, fetched by the app from GitHub
+├── scripts/             # Release helpers (update manifests)
 └── screenshots/         # App screenshots for README
 ```
 
@@ -167,6 +151,12 @@ BatRadar/
 2. It polls the provider APIs in the background on your configured interval
 3. Usage data is broadcast to all open windows (dashboard, overlay, settings) in real time
 4. If usage crosses a threshold, a Windows notification fires — once per usage window, not on every poll
+
+---
+
+## Seasonal themes
+
+The app checks `themes/schedule.json` on GitHub every 6 hours and dresses the dashboard and floating icon for the current event (e.g. Halloween). To add one: create `themes/<id>/theme.json` + SVGs, add a dated entry to the schedule, copy the folder into `src/themes/` (offline fallback), run `npm test`, push to `main`. Themes can only set whitelisted colours and pictures — never CSS or scripts. Turn it off in Settings → "Giao diện theo mùa".
 
 ---
 
@@ -182,12 +172,12 @@ BatRadar/
 ## Release a New Version
 
 ```bash
-# Bump version in package.json, then:
-git tag v0.3.0
-git push origin v0.3.0
+# Bump the version in package.json, src-tauri/Cargo.toml and src-tauri/tauri.conf.json, then:
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
-GitHub Actions will build the installer and publish a release automatically.
+GitHub Actions builds the signed installer, `latest.json` (Tauri updater) and `latest.yml` (for users still on the old Electron build) into a **draft** release. Check it, then publish — users are offered the update from that moment. The workflow needs the repo secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ---
 

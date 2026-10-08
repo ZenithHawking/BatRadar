@@ -1,0 +1,15 @@
+{
+  "id": "halloween-bi-ngo",
+  "label": "Halloween",
+  "colors": { "bg": "#0b0810", "card": "#140f1b", "border": "#2c2238", "accent": "#b388ff", "glow": "#ff8a1f" },
+  "lantern": { "low": "#ff9628", "medium": "#ff9628", "high": "#ff7814", "critical": "#ef4444" },
+  "mascot": {
+    "low": "mascot-low.svg", "medium": "mascot-medium.svg",
+    "high": "mascot-high.svg", "critical": "mascot-critical.svg",
+    "sleepZ": true
+  },
+  "orbiter": "orbiter.svg",
+  "header": { "badge": "badge.svg", "flyer": "flyer.svg", "moon": true },
+  "particles": { "type": "rise", "color": "#ff8a1f" },
+  "fog": "#a078dc"
+}
