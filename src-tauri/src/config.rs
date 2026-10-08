@@ -81,11 +81,13 @@ pub fn load_from(path: &std::path::Path) -> (Config, bool) {
     match std::fs::read_to_string(path) {
         Ok(s) => match serde_json::from_str::<Config>(&s) {
             Ok(mut cfg) => {
+                mark_unreadable(path, false);
                 let migrated = migrate(&mut cfg);
                 (cfg, migrated)
             }
             Err(e) => {
                 eprintln!("[BatRadar] config.json unreadable, using defaults: {e}");
+                mark_unreadable(path, true);
                 (Config::default(), false)
             }
         },
@@ -138,8 +140,30 @@ pub fn save_to(path: &std::path::Path, cfg: &Config) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// Config files that failed to parse this run. Every command does load() then
+/// save(), so without this the first icon drag would replace a hand-edited file
+/// that has a typo with defaults. Fixing the file (it parses again) clears it.
+static UNREADABLE: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+fn mark_unreadable(path: &std::path::Path, unreadable: bool) {
+    if let Ok(mut list) = UNREADABLE.lock() {
+        list.retain(|p| p != path);
+        if unreadable {
+            list.push(path.to_path_buf());
+        }
+    }
+}
+
+pub fn save_checked(path: &std::path::Path, cfg: &Config) -> std::io::Result<()> {
+    let blocked = UNREADABLE.lock().map(|l| l.iter().any(|p| p == path)).unwrap_or(false);
+    if blocked {
+        return Err(std::io::Error::other("config.json is unreadable; not overwriting it"));
+    }
+    save_to(path, cfg)
+}
+
 pub fn save(cfg: &Config) {
-    if let Err(e) = save_to(&config_path(), cfg) {
+    if let Err(e) = save_checked(&config_path(), cfg) {
         eprintln!("[BatRadar] config save failed: {e}");
     }
 }
@@ -181,6 +205,15 @@ mod tests {
         let (cfg, _) = load_from(&p);
         assert_eq!(cfg.poll_interval_seconds, 60);
         assert!(cfg.seasonal_theme);
+    }
+
+    #[test]
+    fn unreadable_file_survives_a_later_save() {
+        let p = tmp("corrupt-save");
+        std::fs::write(&p, "{ trailing, }").unwrap();
+        let (cfg, _) = load_from(&p);
+        let _ = save_checked(&p, &cfg);
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "{ trailing, }");
     }
 
     #[test]
